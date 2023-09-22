@@ -45,6 +45,10 @@ class GitRepo(val dir: Path) {
     fun deleteBranchForcefully(branch: String) =
         runInteractivePrintingCommand("git", "branch", "-D", branch)
 
+    fun createPullRequest(refname: String) {
+        runInteractivePrintingCommand("gh", "pr", "create", "--head", refname)
+    }
+
     // For some reason --prune-tags causes problems with me in some repos that I haven't yet figured out.
     fun fetchAndPrune() = git("git", "fetch", "--prune" /*, "--prune-tags" */)
 

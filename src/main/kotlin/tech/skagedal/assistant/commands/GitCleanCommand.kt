@@ -2,13 +2,7 @@ package tech.skagedal.assistant.commands
 
 import com.github.ajalt.clikt.core.CliktCommand
 import tech.skagedal.assistant.TaskResult
-import tech.skagedal.assistant.commands.GitCleanCommand.BranchAction.DELETE
-import tech.skagedal.assistant.commands.GitCleanCommand.BranchAction.LOG
-import tech.skagedal.assistant.commands.GitCleanCommand.BranchAction.NOTHING
-import tech.skagedal.assistant.commands.GitCleanCommand.BranchAction.PUSH
-import tech.skagedal.assistant.commands.GitCleanCommand.BranchAction.PUSH_CREATING_ORIGIN
-import tech.skagedal.assistant.commands.GitCleanCommand.BranchAction.REBASE
-import tech.skagedal.assistant.commands.GitCleanCommand.BranchAction.SHELL
+import tech.skagedal.assistant.commands.GitCleanCommand.BranchAction.*
 import tech.skagedal.assistant.git.Branch
 import tech.skagedal.assistant.git.GitRepo
 import tech.skagedal.assistant.git.UpstreamStatus.IDENTICAL
@@ -29,6 +23,7 @@ class GitCleanCommand(val fileSystem: FileSystem, val userInterface: UserInterfa
     enum class BranchAction(val description: String) {
         PUSH("Push to origin"),
         PUSH_CREATING_ORIGIN("Push to create origin"),
+        CREATE_PR("Create pull request"),
         REBASE("Rebase onto origin"),
         DELETE("Delete it"),
         LOG("Show git log"),
@@ -74,7 +69,7 @@ class GitCleanCommand(val fileSystem: FileSystem, val userInterface: UserInterfa
             }
         } ?: selectAction(
             repo, branch, "Branch has no upstream", listOf(
-                PUSH_CREATING_ORIGIN, DELETE, LOG, SHELL, NOTHING
+                CREATE_PR, PUSH_CREATING_ORIGIN, DELETE, LOG, SHELL, NOTHING
             )
         )
     }
@@ -106,6 +101,10 @@ class GitCleanCommand(val fileSystem: FileSystem, val userInterface: UserInterfa
 
     private fun performAction(repo: GitRepo, branch: Branch, action: BranchAction): ActionResult =
         when (action) {
+            CREATE_PR -> {
+                repo.createPullRequest(branch.refname)
+                ActionResult.Handled
+            }
             PUSH -> {
                 repo.push(branch.refname)
                 ActionResult.Handled
