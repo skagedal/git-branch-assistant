@@ -44,10 +44,8 @@ class GitRepo(val dir: Path) {
         runInteractivePrintingCommand("git", "rebase", upstream, refname)
     fun deleteBranchForcefully(branch: String) =
         runInteractivePrintingCommand("git", "branch", "-D", branch)
-
-    fun createPullRequest(refname: String) {
-        runInteractivePrintingCommand("gh", "pr", "create", "--head", refname)
-    }
+    fun createPullRequest(refname: String) =
+        runInteractivePrintingCommand("gh", "pr", "create", "--head", refname, "--base", defaultBranch())
 
     // For some reason --prune-tags causes problems with me in some repos that I haven't yet figured out.
     fun fetchAndPrune() = git("git", "fetch", "--prune" /*, "--prune-tags" */)
@@ -61,6 +59,9 @@ class GitRepo(val dir: Path) {
     fun getAllRemoteBranches(): List<String> {
         return git("git", "branch", "--remotes", "--format=%(refname:short)").linesExceptTrailing()
     }
+
+    private fun defaultBranch() =
+        git("gh", "repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name")
 
     fun showLog(branch: String) {
         runInteractive("tig", branch)
