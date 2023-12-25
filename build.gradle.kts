@@ -1,12 +1,10 @@
-import org.gradle.api.tasks.testing.logging.TestLogEvent
-
 plugins {
+    id("org.jetbrains.kotlin.jvm") version "1.9.20"
     application
-    kotlin("jvm") version "1.6.0"
 }
 
 repositories {
-    jcenter()
+    mavenCentral()
 }
 
 object Versions {
@@ -15,9 +13,6 @@ object Versions {
 }
 
 dependencies {
-    implementation(platform("org.jetbrains.kotlin:kotlin-bom"))
-    implementation(kotlin("stdlib-jdk8"))
-
     implementation("org.jetbrains.kotlinx", "kotlinx-coroutines-core", "1.3.8")
     implementation("org.jetbrains.kotlinx", "kotlinx-coroutines-jdk8", "1.3.8")
     implementation("com.fasterxml.jackson.module", "jackson-module-kotlin", Versions.jackson)
@@ -34,33 +29,16 @@ dependencies {
 }
 
 application {
-    mainClassName = "tech.skagedal.assistant.MainKt"
-
-}
-
-tasks {
-    test {
-        useJUnitPlatform()
-        testLogging {
-            events = setOf(
-                TestLogEvent.STARTED,
-                TestLogEvent.PASSED,
-                TestLogEvent.FAILED
-            )
-            // show standard out and standard error of the test
-            // JVM(s) on the console
-            showStandardStreams = true
-        }
-    }
+    mainClass.set("tech.skagedal.assistant.MainKt")
 }
 
 java {
-    sourceCompatibility = org.gradle.api.JavaVersion.VERSION_11
-    targetCompatibility = org.gradle.api.JavaVersion.VERSION_11
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(21))
+    }
 }
 
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions {
-        jvmTarget = "11"
-    }
+tasks.named<Test>("test") {
+    // Use JUnit Platform for unit tests.
+    useJUnitPlatform()
 }
