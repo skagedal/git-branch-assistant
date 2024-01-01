@@ -21,7 +21,7 @@ class LoggingConfigurator: ContextAwareBase(), Configurator {
             rootLogger.addAppender(createConsoleAppender(loggerContext))
         }
         rootLogger.addAppender(createFileAppender(loggerContext))
-        return Configurator.ExecutionStatus.NEUTRAL
+        return Configurator.ExecutionStatus.DO_NOT_INVOKE_NEXT_IF_ANY
     }
 
     private fun createConsoleAppender(loggerContext: LoggerContext) = ConsoleAppender<ILoggingEvent>().apply {
