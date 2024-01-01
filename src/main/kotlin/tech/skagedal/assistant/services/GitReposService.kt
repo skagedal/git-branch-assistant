@@ -106,5 +106,4 @@ class GitReposService(private val fileSystem: FileSystem) {
     )
 }
 
-private fun List<Branch>.anyNeedAction() = any { it.needsAction() }
 private fun Branch.needsAction() = upstream?.let { it.status != UpstreamStatus.IDENTICAL } ?: true

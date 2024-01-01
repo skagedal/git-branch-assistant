@@ -17,16 +17,7 @@ class GitReposCommand(
     private val gitReposService: GitReposService,
     private val repository: Repository,
 ) : CliktCommand(name = "git-repos") {
-    val defaultBranches by option(
-        "-b",
-        metavar = "DEFAULTBRANCHES",
-        help = "Comma-separated list of branches that should be checked out when we leave the task.  For each repo, these branches are tried in order."
-    ).split(",")
-
     override fun run() {
-        defaultBranches?.apply {
-            forEach(::println)
-        }
         val path = fileSystem.getPath(".").toAbsolutePath().normalize()
         val taskResult = gitReposService.handleAllGitRepos(path)
 
