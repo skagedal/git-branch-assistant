@@ -18,7 +18,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 class GitReposService(private val fileSystem: FileSystem) {
-    fun handleAllGitRepos(path1: Path) = fetchAllResults(path1)
+    fun handleAllGitRepos(path: Path) = fetchAllResults(path)
         .filter { it.result != GitResult.Clean }
         .fold(TaskResult.Proceed as TaskResult) { taskResult, repoResult ->
             when (taskResult) {

@@ -61,7 +61,7 @@ class GitRepo(val dir: Path) {
     }
 
     private fun defaultBranch() =
-        git("gh", "repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name")
+        git("gh", "repo", "view", "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name").trim()
 
     fun showLog(branch: String) {
         runInteractive("tig", branch)
