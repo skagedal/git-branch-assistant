@@ -23,7 +23,7 @@ class GitCleanCommand(val fileSystem: FileSystem, val userInterface: UserInterfa
     enum class BranchAction(val description: String) {
         PUSH("Push to origin"),
         PUSH_CREATING_ORIGIN("Push to create origin"),
-        CREATE_PR("Create pull request"),
+        CREATE_PR("Push and create pull request"),
         REBASE("Rebase onto origin"),
         DELETE("Delete it"),
         LOG("Show git log"),
@@ -102,6 +102,7 @@ class GitCleanCommand(val fileSystem: FileSystem, val userInterface: UserInterfa
     private fun performAction(repo: GitRepo, branch: Branch, action: BranchAction): ActionResult =
         when (action) {
             CREATE_PR -> {
+                repo.pushCreatingOrigin(branch.refname)
                 repo.createPullRequest(branch.refname)
                 ActionResult.Handled
             }
