@@ -15,12 +15,13 @@ import tech.skagedal.assistant.configuration.ProcessEnvironment
 import java.nio.file.FileSystems
 
 class LoggingConfigurator: ContextAwareBase(), Configurator {
-    override fun configure(loggerContext: LoggerContext) {
+    override fun configure(loggerContext: LoggerContext): Configurator.ExecutionStatus {
         val rootLogger = loggerContext.getLogger(Logger.ROOT_LOGGER_NAME)
         if (ProcessEnvironment.DEBUG) {
             rootLogger.addAppender(createConsoleAppender(loggerContext))
         }
         rootLogger.addAppender(createFileAppender(loggerContext))
+        return Configurator.ExecutionStatus.NEUTRAL
     }
 
     private fun createConsoleAppender(loggerContext: LoggerContext) = ConsoleAppender<ILoggingEvent>().apply {
