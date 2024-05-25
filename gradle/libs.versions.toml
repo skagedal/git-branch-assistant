@@ -1,5 +1,5 @@
 [versions]
-org-jetbrains-kotlinx = "1.8.0"
+org-jetbrains-kotlinx = "1.8.1"
 
 [libraries]
 clikt = "com.github.ajalt:clikt:2.8.0"
@@ -13,5 +13,5 @@ slf4j-api = "org.slf4j:slf4j-api:2.0.13"
 
 [plugins]
 ben-manes-versions = "com.github.ben-manes.versions:0.51.0"
-kotlin-jvm = "org.jetbrains.kotlin.jvm:1.9.24"
+kotlin-jvm = "org.jetbrains.kotlin.jvm:2.0.0"
 version-catalog-update = "nl.littlerobots.version-catalog-update:0.8.4"
