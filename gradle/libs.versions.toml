@@ -4,14 +4,14 @@ org-jetbrains-kotlinx = "1.8.1"
 [libraries]
 clikt = "com.github.ajalt:clikt:2.8.0"
 consoleui = "de.codeshelf.consoleui:consoleui:0.0.13"
-jackson-bom = "com.fasterxml.jackson:jackson-bom:2.17.1"
-junit-jupiter = "org.junit.jupiter:junit-jupiter:5.10.3"
+jackson-bom = "com.fasterxml.jackson:jackson-bom:2.17.2"
+junit-jupiter = "org.junit.jupiter:junit-jupiter:5.11.0"
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "org-jetbrains-kotlinx" }
 kotlinx-coroutines-jdk8 = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8", version.ref = "org-jetbrains-kotlinx" }
-logback-classic = "ch.qos.logback:logback-classic:1.5.6"
-slf4j-api = "org.slf4j:slf4j-api:2.0.13"
+logback-classic = "ch.qos.logback:logback-classic:1.5.7"
+slf4j-api = "org.slf4j:slf4j-api:2.0.16"
 
 [plugins]
 ben-manes-versions = "com.github.ben-manes.versions:0.51.0"
-kotlin-jvm = "org.jetbrains.kotlin.jvm:2.0.0"
+kotlin-jvm = "org.jetbrains.kotlin.jvm:2.0.20"
 version-catalog-update = "nl.littlerobots.version-catalog-update:0.8.4"
