@@ -1,5 +1,6 @@
 package tech.skagedal.assistant
 
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import tech.skagedal.assistant.commands.GitCleanCommand
 import tech.skagedal.assistant.commands.GitReposCommand
@@ -9,9 +10,10 @@ import tech.skagedal.assistant.ui.UserInterface
 import java.nio.file.FileSystems
 
 private object Main {
-    val logger = LoggerFactory.getLogger(javaClass)
+    val logger: Logger by lazy { LoggerFactory.getLogger(javaClass) }
 
     fun main(args: Array<String>) {
+        System.setProperty("slf4j.internal.verbosity", "WARN")
         logger.info("Starting simons-assistant")
 
         val fileSystem = FileSystems.getDefault()
