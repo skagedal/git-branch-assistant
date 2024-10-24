@@ -5,10 +5,10 @@ org-jetbrains-kotlinx = "1.9.0"
 clikt = "com.github.ajalt:clikt:2.8.0"
 consoleui = "de.codeshelf.consoleui:consoleui:0.0.13"
 jackson-bom = "com.fasterxml.jackson:jackson-bom:2.18.0"
-junit-jupiter = "org.junit.jupiter:junit-jupiter:5.11.2"
+junit-jupiter = "org.junit.jupiter:junit-jupiter:5.11.3"
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "org-jetbrains-kotlinx" }
 kotlinx-coroutines-jdk8 = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8", version.ref = "org-jetbrains-kotlinx" }
-logback-classic = "ch.qos.logback:logback-classic:1.5.9"
+logback-classic = "ch.qos.logback:logback-classic:1.5.11"
 slf4j-api = "org.slf4j:slf4j-api:2.0.16"
 
 [plugins]
