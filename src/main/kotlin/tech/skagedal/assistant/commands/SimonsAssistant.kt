@@ -6,7 +6,7 @@ import com.github.ajalt.clikt.core.subcommands
 class SimonsAssistant(
     subcommands: List<CliktCommand>
 ) : CliktCommand(
-    name = "simons-assistant"
+    name = "git-branch-assistant"
 ) {
     init {
         subcommands(subcommands)

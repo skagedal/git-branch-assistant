@@ -2,7 +2,7 @@
 
 set -e
 
-TOOL=simons-assistant
+TOOL=git-branch-assistant
 BIN=${HOME}/local/bin
 BUILT_BINARY=`pwd`/build/install/${TOOL}/bin/${TOOL}
 

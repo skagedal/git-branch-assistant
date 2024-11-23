@@ -14,7 +14,7 @@ private object Main {
 
     fun main(args: Array<String>) {
         System.setProperty("slf4j.internal.verbosity", "WARN")
-        logger.info("Starting simons-assistant")
+        logger.info("Starting git-branch-assistant")
 
         val fileSystem = FileSystems.getDefault()
         val assistant = SimonsAssistant(

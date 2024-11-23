@@ -1,8 +1,6 @@
 package tech.skagedal.assistant.commands
 
 import com.github.ajalt.clikt.core.CliktCommand
-import com.github.ajalt.clikt.parameters.options.option
-import com.github.ajalt.clikt.parameters.options.split
 import tech.skagedal.assistant.Repository
 import tech.skagedal.assistant.TaskResult
 import tech.skagedal.assistant.services.GitReposService
@@ -25,7 +23,7 @@ class GitReposCommand(
             TaskResult.Proceed -> EXIT_NORMAL
             TaskResult.ActionRequired -> EXIT_NORMAL
             is TaskResult.ShellActionRequired -> {
-                repository.setRequestedDirectory(taskResult.directory)
+                repository.setSuggestedDirectory(taskResult.directory)
                 CHANGE_DIRECTORY
             }
         }

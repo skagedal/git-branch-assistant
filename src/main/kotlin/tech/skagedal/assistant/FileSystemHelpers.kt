@@ -6,7 +6,7 @@ import java.util.regex.Matcher
 
 fun FileSystem.home() = getPath(System.getProperty("user.home"))
 
-fun FileSystem.assistantDirectory() = home().resolve(".simons-assistant")
+fun FileSystem.assistantDirectory() = home().resolve(".git-branch-assistant")
 fun FileSystem.assistantDataDirectory() = assistantDirectory().resolve("data")
 fun FileSystem.logsDirectory() = assistantDirectory().resolve("logs")
 
