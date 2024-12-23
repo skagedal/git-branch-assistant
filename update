@@ -1,6 +1,3 @@
 #!/bin/sh
 ./gradlew wrapper --gradle-version=latest
 ./gradlew versionCatalogUpdate
-
-cd git-assistant
-cargo update
