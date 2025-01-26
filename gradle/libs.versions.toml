@@ -12,6 +12,6 @@ logback-classic = "ch.qos.logback:logback-classic:1.5.16"
 slf4j-api = "org.slf4j:slf4j-api:2.0.16"
 
 [plugins]
-ben-manes-versions = "com.github.ben-manes.versions:0.51.0"
+ben-manes-versions = "com.github.ben-manes.versions:0.52.0"
 kotlin-jvm = "org.jetbrains.kotlin.jvm:2.1.0"
 version-catalog-update = "nl.littlerobots.version-catalog-update:0.8.5"
