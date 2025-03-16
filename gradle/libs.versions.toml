@@ -5,7 +5,7 @@ org-jetbrains-kotlinx = "1.10.1"
 clikt = "com.github.ajalt:clikt:2.8.0"
 consoleui = "de.codeshelf.consoleui:consoleui:0.0.13"
 jackson-bom = "com.fasterxml.jackson:jackson-bom:2.18.3"
-junit-jupiter = "org.junit.jupiter:junit-jupiter:5.12.0"
+junit-jupiter = "org.junit.jupiter:junit-jupiter:5.12.1"
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "org-jetbrains-kotlinx" }
 kotlinx-coroutines-jdk8 = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8", version.ref = "org-jetbrains-kotlinx" }
 logback-classic = "ch.qos.logback:logback-classic:1.5.17"
