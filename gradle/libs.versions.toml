@@ -13,5 +13,5 @@ slf4j-api = "org.slf4j:slf4j-api:2.0.17"
 
 [plugins]
 ben-manes-versions = "com.github.ben-manes.versions:0.52.0"
-kotlin-jvm = "org.jetbrains.kotlin.jvm:2.2.10"
+kotlin-jvm = "org.jetbrains.kotlin.jvm:2.2.20"
 version-catalog-update = "nl.littlerobots.version-catalog-update:1.0.0"
