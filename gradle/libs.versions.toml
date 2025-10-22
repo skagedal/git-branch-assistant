@@ -3,12 +3,12 @@ org-jetbrains-kotlinx = "1.10.2"
 
 [libraries]
 clikt = "com.github.ajalt:clikt:2.8.0"
-consoleui = "de.codeshelf.consoleui:consoleui:0.0.13"
+jline = "org.jline:jline:3.28.0"
 jackson-bom = "com.fasterxml.jackson:jackson-bom:2.20.0"
 junit-jupiter = "org.junit.jupiter:junit-jupiter:6.0.0"
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "org-jetbrains-kotlinx" }
 kotlinx-coroutines-jdk8 = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8", version.ref = "org-jetbrains-kotlinx" }
-logback-classic = "ch.qos.logback:logback-classic:1.5.19"
+logback-classic = "ch.qos.logback:logback-classic:1.5.20"
 slf4j-api = "org.slf4j:slf4j-api:2.0.17"
 
 [plugins]
