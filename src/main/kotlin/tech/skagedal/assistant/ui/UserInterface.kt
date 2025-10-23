@@ -1,7 +1,8 @@
 package tech.skagedal.assistant.ui
 
-import org.jline.reader.LineReaderBuilder
-import org.jline.terminal.TerminalBuilder
+import de.codeshelf.consoleui.prompt.ConsolePrompt
+import de.codeshelf.consoleui.prompt.ListResult
+import org.fusesource.jansi.AnsiConsole
 
 class UserInterface {
     class Choices<T>() {
@@ -14,23 +15,25 @@ class UserInterface {
     fun <T> pickOne(message: String, choiceBuilder: Choices<T>.() -> Unit): T {
         val choices = Choices<T>().apply(choiceBuilder).choices
 
-        println(message)
-        choices.forEachIndexed { index, pair ->
-            println("${index + 1}. ${pair.second}")
-        }
+        try {
+            AnsiConsole.systemInstall()
 
-        val terminal = TerminalBuilder.builder().build()
-        val reader = LineReaderBuilder.builder()
-            .terminal(terminal)
-            .build()
-
-        while (true) {
-            val line = reader.readLine("Select (1-${choices.size}): ")
-            val selection = line.toIntOrNull()
-            if (selection != null && selection in 1..choices.size) {
-                return choices[selection - 1].first
+            val prompt = ConsolePrompt()
+            val promptBuilder = prompt.promptBuilder
+            val listPromptBuilder = promptBuilder.createListPrompt()
+                .name("choice")
+                .message(message)
+            choices.forEachIndexed { index, pair ->
+                listPromptBuilder
+                    .newItem(index.toString()).text(pair.second).add()
             }
-            println("Invalid selection. Please enter a number between 1 and ${choices.size}.")
+            listPromptBuilder.addPrompt()
+            val result = prompt.prompt(promptBuilder.build())
+            val listResult = result["choice"] as ListResult
+            val choice = choices[listResult.selectedId.toInt()]
+            return choice.first
+        } finally {
+            AnsiConsole.systemUninstall()
         }
     }
 

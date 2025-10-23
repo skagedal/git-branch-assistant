@@ -20,7 +20,7 @@ dependencies {
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation(libs.clikt)
-    implementation(libs.jline)
+    implementation(libs.consoleui)
 
     compileOnly(libs.slf4j.api)
 
