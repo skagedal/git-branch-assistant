@@ -1,35 +1,20 @@
 use anyhow::{Result, anyhow};
 use dialoguer::{Select, theme::ColorfulTheme};
 
+pub trait Prompt: Clone {
+    fn select(&self, message: &str, options: &[String]) -> Result<usize>;
+}
+
 #[derive(Default, Clone)]
-pub struct UserInterface;
+pub struct DialoguerPrompt;
 
-#[derive(Clone)]
-pub struct Choice<T> {
-    identifier: T,
-    label: String,
-}
-
-impl<T> Choice<T> {
-    pub fn new(identifier: T, label: impl Into<String>) -> Self {
-        Self {
-            identifier,
-            label: label.into(),
-        }
-    }
-}
-
-impl UserInterface {
-    pub fn new() -> Self {
-        Self
-    }
-
-    pub fn pick_one<T: Clone>(&self, message: &str, choices: &[Choice<T>]) -> Result<T> {
-        if choices.is_empty() {
-            return Err(anyhow!("no choices provided"));
+impl Prompt for DialoguerPrompt {
+    fn select(&self, message: &str, options: &[String]) -> Result<usize> {
+        if options.is_empty() {
+            return Err(anyhow!("no options provided"));
         }
 
-        let labels: Vec<&str> = choices.iter().map(|choice| choice.label.as_str()).collect();
+        let labels: Vec<&str> = options.iter().map(|option| option.as_str()).collect();
         let theme = ColorfulTheme::default();
         let selection = Select::with_theme(&theme)
             .with_prompt(message)
@@ -37,9 +22,6 @@ impl UserInterface {
             .default(0)
             .interact_opt()?;
 
-        match selection {
-            Some(index) => Ok(choices[index].identifier.clone()),
-            None => Err(anyhow!("no selection was made")),
-        }
+        selection.ok_or_else(|| anyhow!("no selection was made"))
     }
 }

@@ -123,19 +123,16 @@ impl GitRepo {
     }
 
     fn get_upstream_status(&self, local: &str, upstream: &str) -> Result<UpstreamStatus> {
+        if !self.branch_exists(upstream)? {
+            return Ok(UpstreamStatus::UpstreamIsGone);
+        }
         let local_is_ancestor = self.is_ancestor(local, upstream)?;
         let upstream_is_ancestor = self.is_ancestor(upstream, local)?;
         Ok(match (local_is_ancestor, upstream_is_ancestor) {
             (true, true) => UpstreamStatus::Identical,
             (true, false) => UpstreamStatus::UpstreamIsAheadOfLocal,
             (false, true) => UpstreamStatus::LocalIsAheadOfUpstream,
-            (false, false) => {
-                if self.branch_exists(upstream)? {
-                    UpstreamStatus::MergeNeeded
-                } else {
-                    UpstreamStatus::UpstreamIsGone
-                }
-            }
+            (false, false) => UpstreamStatus::MergeNeeded,
         })
     }
 
@@ -146,6 +143,8 @@ impl GitRepo {
             .arg("--is-ancestor")
             .arg(base)
             .arg(commit)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status()
             .with_context(|| {
                 format!("failed to run git merge-base --is-ancestor {base} {commit}")
@@ -153,7 +152,7 @@ impl GitRepo {
 
         match status.code() {
             Some(0) => Ok(true),
-            Some(1) => Ok(false),
+            Some(1) | Some(128) => Ok(false),
             Some(code) => Err(anyhow!(
                 "git merge-base returned unexpected exit code {code}"
             )),
@@ -168,6 +167,8 @@ impl GitRepo {
             .arg("--quiet")
             .arg("--verify")
             .arg(branch)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .status()
             .with_context(|| format!("failed to run git rev-parse --verify {branch}"))?;
 
@@ -267,3 +268,6 @@ fn format_command(program: &str, args: &[&str]) -> String {
         .collect();
     parts.join(" ")
 }
+
+#[cfg(test)]
+mod tests;

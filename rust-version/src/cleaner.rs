@@ -4,16 +4,16 @@ use anyhow::{Result, anyhow};
 
 use crate::git::{Branch, GitRepo, UpstreamStatus};
 use crate::task_result::TaskResult;
-use crate::ui::{Choice, UserInterface};
+use crate::ui::Prompt;
 
 #[derive(Clone)]
-pub struct GitCleaner {
-    ui: UserInterface,
+pub struct GitCleaner<P: Prompt> {
+    prompt: P,
 }
 
-impl GitCleaner {
-    pub fn new(ui: UserInterface) -> Self {
-        Self { ui }
+impl<P: Prompt> GitCleaner<P> {
+    pub fn new(prompt: P) -> Self {
+        Self { prompt }
     }
 
     pub fn handle(&self, repo: &GitRepo, branches: Vec<Branch>) -> Result<TaskResult> {
@@ -103,13 +103,17 @@ impl GitCleaner {
                 .unwrap_or_else(|| repo.dir().to_string_lossy().into_owned());
 
             let prompt = format!("{}:{}: {}", repo_display, branch.refname, message);
-            let choices: Vec<Choice<BranchAction>> = actions
+            let options: Vec<String> = actions
                 .iter()
-                .copied()
-                .map(|action| Choice::new(action, action.description()))
+                .map(|action| action.description().to_string())
                 .collect();
 
-            let action = self.ui.pick_one(&prompt, &choices)?;
+            let selected_index = self.prompt.select(&prompt, &options)?;
+            let action = actions
+                .get(selected_index)
+                .copied()
+                .ok_or_else(|| anyhow!("invalid selection index {selected_index}"))?;
+
             match self.perform_action(repo, branch, action)? {
                 ActionResult::Handled => return Ok(TaskResult::Proceed),
                 ActionResult::NotHandled => continue,
@@ -166,7 +170,7 @@ impl GitCleaner {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum BranchAction {
     Push,
     PushCreatingOrigin,
@@ -197,4 +201,76 @@ enum ActionResult {
     Handled,
     NotHandled,
     ExitToShell(PathBuf),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::git::{Branch, Upstream, UpstreamStatus};
+    use anyhow::{Result, anyhow};
+    use std::sync::{Arc, Mutex};
+    use tempfile::tempdir;
+
+    #[derive(Clone, Default)]
+    struct TestPrompt {
+        selections: Arc<Mutex<Vec<usize>>>,
+    }
+
+    impl TestPrompt {
+        fn with_selections(selections: Vec<usize>) -> Self {
+            Self {
+                selections: Arc::new(Mutex::new(selections)),
+            }
+        }
+    }
+
+    impl Prompt for TestPrompt {
+        fn select(&self, _message: &str, options: &[String]) -> Result<usize> {
+            let mut selections = self.selections.lock().expect("lock poisoned");
+            if selections.is_empty() {
+                return Err(anyhow!("no selections remaining"));
+            }
+            let index = selections.remove(0);
+            if index >= options.len() {
+                return Err(anyhow!("selected index {index} out of bounds"));
+            }
+            Ok(index)
+        }
+    }
+
+    #[test]
+    fn local_ahead_branch_allows_do_nothing() -> Result<()> {
+        let temp = tempdir()?;
+        let repo = GitRepo::new(temp.path().to_path_buf());
+        let branch = Branch {
+            refname: "feature".into(),
+            upstream: Some(Upstream {
+                name: "origin/feature".into(),
+                status: UpstreamStatus::LocalIsAheadOfUpstream,
+            }),
+        };
+
+        let cleaner = GitCleaner::new(TestPrompt::with_selections(vec![3]));
+        let result = cleaner.handle_branch(&repo, &branch)?;
+        assert!(matches!(result, TaskResult::Proceed));
+        Ok(())
+    }
+
+    #[test]
+    fn identical_branch_skips_prompt() -> Result<()> {
+        let temp = tempdir()?;
+        let repo = GitRepo::new(temp.path().to_path_buf());
+        let branch = Branch {
+            refname: "feature".into(),
+            upstream: Some(Upstream {
+                name: "origin/feature".into(),
+                status: UpstreamStatus::Identical,
+            }),
+        };
+
+        let cleaner = GitCleaner::new(TestPrompt::default());
+        let result = cleaner.handle_branch(&repo, &branch)?;
+        assert!(matches!(result, TaskResult::Proceed));
+        Ok(())
+    }
 }

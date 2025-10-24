@@ -8,16 +8,16 @@ use crate::cleaner::GitCleaner;
 use crate::fs_utils::is_globally_ignored;
 use crate::git::{Branch, GitRepo};
 use crate::task_result::TaskResult;
-use crate::ui::UserInterface;
+use crate::ui::DialoguerPrompt;
 
 pub struct GitReposService {
-    ui: UserInterface,
+    prompt: DialoguerPrompt,
 }
 
 impl GitReposService {
     pub fn new() -> Self {
         Self {
-            ui: UserInterface::new(),
+            prompt: DialoguerPrompt::default(),
         }
     }
 
@@ -125,7 +125,7 @@ impl GitReposService {
                     result_with_path.path.display()
                 );
                 let repo = GitRepo::new(result_with_path.path);
-                let cleaner = GitCleaner::new(self.ui.clone());
+                let cleaner = GitCleaner::new(self.prompt.clone());
                 cleaner.handle(&repo, branches)
             }
         }

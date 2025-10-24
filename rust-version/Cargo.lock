@@ -185,6 +185,7 @@ dependencies = [
  "dialoguer",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
