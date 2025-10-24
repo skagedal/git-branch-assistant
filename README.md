@@ -55,7 +55,7 @@ flowchart LR
 
 The origin is two commits ahead of our local main – you can read the arrows as illustrating the relation "is the parent of". (In reality, it is rather the child commit that is "pointing to" the parent, but it feels more natural to illustrate it this way somehow.)
 
-Whenever the local branch is an _ancestor_ of its upstream, we can fast-forward the local branch to the upstream. Just like if you did a `git pull` with this branch checked out, `git-branch-assistant` will do this for you. 
+Whenever the local branch is an _ancestor_ of its upstream, we can fast-forward the local branch to the upstream. `git-branch-assistant` will do this using `git rebase`, which in this case has the same effect as a fast-forward pull, but can be done on a branch other than the one currently checked out.
 
 ### Local branch is ahead
 
@@ -93,7 +93,19 @@ The most common thing I will want to do then is to rebase the local branch on th
 ### Upstream is set, but it doesn't exist
 
 The last situation is when the local branch has an upstream set, but it doesn't exist.
-This usually happens when a pull request has been merged, so the default suggestion will be to remove the local branch. 
+This usually happens when a pull request has been merged, so the default suggestion will be to remove the local branch.
+
+## Git repos management
+
+The `git-branch-assistant git-repos` command provides batch management for multiple git repositories. When run from a directory containing multiple git repositories (as subdirectories), it will:
+
+1. Scan all subdirectories in the current directory
+2. Check each directory to see if it's a git repository
+3. For each repository, check its status:
+   - **Dirty repositories**: Repositories with uncommitted changes are reported so you can review them
+   - **Branches needing action**: Repositories where branches need syncing with upstreams are automatically processed using the same logic as `git-clean`
+
+This command is particularly useful when you maintain multiple related repositories and want to ensure they're all in a clean, synchronized state. It will interactively handle any repositories that need attention, allowing you to quickly clean up branches across your entire workspace.
 
 ---
 
