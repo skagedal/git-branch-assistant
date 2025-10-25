@@ -2,8 +2,6 @@
 
 **git-branch-assistant** is a command line application to manage your git repositories and synchronize branches with their upstreams. There are many other tools with similar functionality[^1]; this one is built to support the workflow I personally prefer. I use it together with my [assistant](https://github.com/skagedal/assistant) tool, but it can be used as a standalone program.
 
-If you plan to contribute, please read the short [Repository Guidelines](AGENTS.md) for project layout, coding style, and workflow expectations.
-
 ## Git cleanup
 
 The `git-branch-assistant git-clean` command cleans up branches in the git repository of the current working directory.
