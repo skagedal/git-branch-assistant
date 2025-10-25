@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -8,6 +9,7 @@ use serde::Deserialize;
 pub struct Branch {
     pub refname: String,
     pub upstream: Option<Upstream>,
+    pub worktree_path: Option<PathBuf>,
 }
 
 impl Branch {
@@ -23,6 +25,33 @@ impl Branch {
 pub struct Upstream {
     pub name: String,
     pub status: UpstreamStatus,
+}
+
+#[derive(Debug, Clone)]
+pub struct Worktree {
+    pub path: PathBuf,
+    pub branch: Option<String>,
+}
+
+impl Worktree {
+    pub fn is_dirty(&self) -> Result<bool> {
+        let output = Command::new("git")
+            .arg("status")
+            .arg("--porcelain")
+            .arg("-unormal")
+            .current_dir(&self.path)
+            .output()
+            .with_context(|| format!("failed to run git status in {}", self.path.display()))?;
+
+        if !output.status.success() {
+            return Err(anyhow!(
+                "git status returned non-zero status in {}",
+                self.path.display()
+            ));
+        }
+
+        Ok(!output.stdout.is_empty())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,6 +82,12 @@ impl GitRepo {
             &["branch", "--format=%(refname:short):%(upstream:short)"],
         )?;
 
+        let worktree_map: HashMap<String, PathBuf> = self
+            .worktrees()?
+            .into_iter()
+            .filter_map(|worktree| worktree.branch.map(|branch| (branch, worktree.path)))
+            .collect();
+
         let mut branches = Vec::new();
         for line in output.lines().filter(|line| !line.trim().is_empty()) {
             let mut parts = line.splitn(2, ':');
@@ -61,6 +96,7 @@ impl GitRepo {
                 .ok_or_else(|| anyhow!("unexpected output from git branch: {line}"))?
                 .trim()
                 .to_string();
+            let worktree_path = worktree_map.get(&local).cloned();
             let upstream_part = parts.next().unwrap_or("").trim();
             let upstream = if upstream_part.is_empty() {
                 None
@@ -74,10 +110,25 @@ impl GitRepo {
             branches.push(Branch {
                 refname: local,
                 upstream,
+                worktree_path,
             });
         }
 
         Ok(branches)
+    }
+
+    pub fn worktrees(&self) -> Result<Vec<Worktree>> {
+        let output = self.run_and_capture("git", &["worktree", "list", "--porcelain"])?;
+        parse_worktrees(&output)
+    }
+
+    pub fn find_dirty_worktree(&self) -> Result<Option<Worktree>> {
+        for worktree in self.worktrees()? {
+            if worktree.is_dirty()? {
+                return Ok(Some(worktree));
+            }
+        }
+        Ok(None)
     }
 
     pub fn push(&self, refname: &str) -> Result<()> {
@@ -94,6 +145,12 @@ impl GitRepo {
 
     pub fn delete_branch_forcefully(&self, branch: &str) -> Result<()> {
         self.run_interactive_printing("git", &["branch", "-D", branch])
+    }
+
+    pub fn delete_worktree(&self, path: &Path) -> Result<()> {
+        let path_string = path.to_string_lossy().to_string();
+        let args = ["worktree", "remove", path_string.as_str()];
+        self.run_interactive_printing("git", &args)
     }
 
     pub fn create_pull_request(&self, refname: &str) -> Result<()> {
@@ -267,6 +324,63 @@ fn format_command(program: &str, args: &[&str]) -> String {
         .chain(args.iter().copied())
         .collect();
     parts.join(" ")
+}
+
+fn parse_worktrees(output: &str) -> Result<Vec<Worktree>> {
+    #[derive(Default)]
+    struct Pending {
+        path: Option<PathBuf>,
+        branch: Option<String>,
+    }
+
+    fn finish(pending: &mut Pending, worktrees: &mut Vec<Worktree>) -> Result<()> {
+        if let Some(path) = pending.path.take() {
+            worktrees.push(Worktree {
+                path,
+                branch: pending.branch.take(),
+            });
+        }
+        Ok(())
+    }
+
+    let mut worktrees = Vec::new();
+    let mut pending = Pending::default();
+
+    for line in output.lines().chain(std::iter::once("")) {
+        let line = line.trim_end();
+        if line.is_empty() {
+            finish(&mut pending, &mut worktrees)?;
+            continue;
+        }
+
+        let (key, value) = match line.split_once(' ') {
+            Some((key, value)) => (key, value.trim()),
+            None => (line, ""),
+        };
+
+        match key {
+            "worktree" => {
+                finish(&mut pending, &mut worktrees)?;
+                if value.is_empty() {
+                    return Err(anyhow!("git worktree entry missing path"));
+                }
+                pending.path = Some(PathBuf::from(value));
+                pending.branch = None;
+            }
+            "branch" => {
+                if !value.is_empty() {
+                    let name = value
+                        .strip_prefix("refs/heads/")
+                        .unwrap_or(value)
+                        .to_string();
+                    pending.branch = Some(name);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    Ok(worktrees)
 }
 
 #[cfg(test)]

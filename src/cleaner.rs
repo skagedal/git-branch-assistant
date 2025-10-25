@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Result, anyhow};
 
@@ -17,6 +18,12 @@ impl<P: Prompt> GitCleaner<P> {
     }
 
     pub fn handle(&self, repo: &GitRepo, branches: Vec<Branch>) -> Result<TaskResult> {
+        if let Some(worktree) = repo.find_dirty_worktree()? {
+            let path = worktree.path;
+            eprintln!("Dirty git worktree: {}", path.display());
+            return Ok(TaskResult::ShellActionRequired(path));
+        }
+
         let mut result = TaskResult::Proceed;
         for branch in branches {
             if !matches!(result, TaskResult::Proceed) {
@@ -32,8 +39,13 @@ impl<P: Prompt> GitCleaner<P> {
             match upstream.status {
                 UpstreamStatus::Identical => Ok(TaskResult::Proceed),
                 UpstreamStatus::UpstreamIsAheadOfLocal => {
-                    repo.rebase(&branch.refname, &upstream.name)?;
-                    Ok(TaskResult::Proceed)
+                    if let Some(path) = worktree_elsewhere_path(branch, repo) {
+                        print_worktree_redirect(branch, &path);
+                        Ok(TaskResult::ShellActionRequired(path))
+                    } else {
+                        repo.rebase(&branch.refname, &upstream.name)?;
+                        Ok(TaskResult::Proceed)
+                    }
                 }
                 UpstreamStatus::LocalIsAheadOfUpstream => self.select_action(
                     repo,
@@ -58,17 +70,18 @@ impl<P: Prompt> GitCleaner<P> {
                         BranchAction::Nothing,
                     ],
                 ),
-                UpstreamStatus::UpstreamIsGone => self.select_action(
-                    repo,
-                    branch,
-                    "Upstream is set, but it is gone",
-                    &[
+                UpstreamStatus::UpstreamIsGone => {
+                    let mut actions = vec![
                         BranchAction::Delete,
                         BranchAction::Log,
                         BranchAction::Shell,
                         BranchAction::Nothing,
-                    ],
-                ),
+                    ];
+                    if branch_checked_out_elsewhere(branch, repo) {
+                        actions.insert(0, BranchAction::DeleteWorktreeAndBranch);
+                    }
+                    self.select_action(repo, branch, "Upstream is set, but it is gone", &actions)
+                }
             }
         } else {
             self.select_action(
@@ -95,6 +108,9 @@ impl<P: Prompt> GitCleaner<P> {
         actions: &[BranchAction],
     ) -> Result<TaskResult> {
         loop {
+            if let Some(path) = branch.worktree_path.as_ref() {
+                print_worktree_hint(branch, path);
+            }
             let repo_display = repo
                 .dir()
                 .file_name()
@@ -145,6 +161,10 @@ impl<P: Prompt> GitCleaner<P> {
                 Ok(ActionResult::Handled)
             }
             BranchAction::Rebase => {
+                if let Some(path) = worktree_elsewhere_path(branch, repo) {
+                    print_worktree_redirect(branch, &path);
+                    return Ok(ActionResult::ExitToShell(path));
+                }
                 let upstream = branch
                     .upstream
                     .as_ref()
@@ -153,7 +173,20 @@ impl<P: Prompt> GitCleaner<P> {
                 Ok(ActionResult::Handled)
             }
             BranchAction::Delete => {
+                if let Some(path) = worktree_elsewhere_path(branch, repo) {
+                    print_worktree_redirect(branch, &path);
+                    return Ok(ActionResult::ExitToShell(path));
+                }
                 repo.checkout_first_available_branch(&["release", "master", "main"])?;
+                repo.delete_branch_forcefully(&branch.refname)?;
+                Ok(ActionResult::Handled)
+            }
+            BranchAction::DeleteWorktreeAndBranch => {
+                let path = branch
+                    .worktree_path
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("branch has no associated worktree to delete"))?;
+                repo.delete_worktree(path)?;
                 repo.delete_branch_forcefully(&branch.refname)?;
                 Ok(ActionResult::Handled)
             }
@@ -162,6 +195,10 @@ impl<P: Prompt> GitCleaner<P> {
                 Ok(ActionResult::NotHandled)
             }
             BranchAction::Shell => {
+                if let Some(path) = worktree_elsewhere_path(branch, repo) {
+                    print_worktree_redirect(branch, &path);
+                    return Ok(ActionResult::ExitToShell(path));
+                }
                 repo.checkout_branch(&branch.refname)?;
                 Ok(ActionResult::ExitToShell(repo.dir().to_path_buf()))
             }
@@ -177,6 +214,7 @@ enum BranchAction {
     CreatePr,
     Rebase,
     Delete,
+    DeleteWorktreeAndBranch,
     Log,
     Shell,
     Nothing,
@@ -190,6 +228,7 @@ impl BranchAction {
             BranchAction::CreatePr => "Push and create pull request",
             BranchAction::Rebase => "Rebase onto origin",
             BranchAction::Delete => "Delete it",
+            BranchAction::DeleteWorktreeAndBranch => "Delete worktree and branch",
             BranchAction::Log => "Show git log",
             BranchAction::Shell => "Exit to shell with branch checked out",
             BranchAction::Nothing => "Do nothing",
@@ -201,6 +240,44 @@ enum ActionResult {
     Handled,
     NotHandled,
     ExitToShell(PathBuf),
+}
+
+fn worktree_elsewhere_path(branch: &Branch, repo: &GitRepo) -> Option<PathBuf> {
+    if branch_checked_out_elsewhere(branch, repo) {
+        branch.worktree_path.clone()
+    } else {
+        None
+    }
+}
+
+fn branch_checked_out_elsewhere(branch: &Branch, repo: &GitRepo) -> bool {
+    match branch.worktree_path.as_ref() {
+        Some(path) => !paths_equivalent(path, repo.dir()),
+        None => false,
+    }
+}
+
+fn print_worktree_hint(branch: &Branch, path: &Path) {
+    println!("{}", worktree_location_message(branch, path));
+}
+
+fn print_worktree_redirect(branch: &Branch, path: &Path) {
+    eprintln!("{}", worktree_location_message(branch, path));
+}
+
+fn worktree_location_message(branch: &Branch, path: &Path) -> String {
+    format!(
+        "Branch '{}' is checked out in worktree {}",
+        branch.refname,
+        path.display()
+    )
+}
+
+fn paths_equivalent(a: &Path, b: &Path) -> bool {
+    match (fs::canonicalize(a), fs::canonicalize(b)) {
+        (Ok(a_can), Ok(b_can)) => a_can == b_can,
+        _ => a == b,
+    }
 }
 
 #[cfg(test)]
@@ -248,6 +325,7 @@ mod tests {
                 name: "origin/feature".into(),
                 status: UpstreamStatus::LocalIsAheadOfUpstream,
             }),
+            worktree_path: None,
         };
 
         let cleaner = GitCleaner::new(TestPrompt::with_selections(vec![3]));
@@ -266,11 +344,91 @@ mod tests {
                 name: "origin/feature".into(),
                 status: UpstreamStatus::Identical,
             }),
+            worktree_path: None,
         };
 
         let cleaner = GitCleaner::new(TestPrompt::default());
         let result = cleaner.handle_branch(&repo, &branch)?;
         assert!(matches!(result, TaskResult::Proceed));
+        Ok(())
+    }
+
+    #[test]
+    fn rebase_redirects_when_branch_in_other_worktree() -> Result<()> {
+        let temp_repo = tempdir()?;
+        let temp_worktree = tempdir()?;
+        let repo = GitRepo::new(temp_repo.path().to_path_buf());
+        let branch = Branch {
+            refname: "feature".into(),
+            upstream: Some(Upstream {
+                name: "origin/feature".into(),
+                status: UpstreamStatus::UpstreamIsAheadOfLocal,
+            }),
+            worktree_path: Some(temp_worktree.path().to_path_buf()),
+        };
+
+        let cleaner = GitCleaner::new(TestPrompt::default());
+        let result = cleaner.handle_branch(&repo, &branch)?;
+        match result {
+            TaskResult::ShellActionRequired(path) => {
+                assert_eq!(path, temp_worktree.path().to_path_buf());
+            }
+            TaskResult::Proceed => panic!("expected shell action"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn shell_action_uses_worktree_path() -> Result<()> {
+        let temp_repo = tempdir()?;
+        let temp_worktree = tempdir()?;
+        let repo = GitRepo::new(temp_repo.path().to_path_buf());
+        let branch = Branch {
+            refname: "feature".into(),
+            upstream: Some(Upstream {
+                name: "origin/feature".into(),
+                status: UpstreamStatus::LocalIsAheadOfUpstream,
+            }),
+            worktree_path: Some(temp_worktree.path().to_path_buf()),
+        };
+
+        let cleaner = GitCleaner::new(TestPrompt::with_selections(vec![2]));
+        let result = cleaner.handle_branch(&repo, &branch)?;
+        match result {
+            TaskResult::ShellActionRequired(path) => {
+                assert_eq!(path, temp_worktree.path().to_path_buf());
+            }
+            TaskResult::Proceed => panic!("expected shell action"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn branch_checked_out_elsewhere_false_when_same_dir() -> Result<()> {
+        let temp = tempdir()?;
+        let repo = GitRepo::new(temp.path().to_path_buf());
+        let branch = Branch {
+            refname: "feature".into(),
+            upstream: None,
+            worktree_path: Some(temp.path().to_path_buf()),
+        };
+
+        assert!(!branch_checked_out_elsewhere(&branch, &repo));
+        Ok(())
+    }
+
+    #[test]
+    fn branch_checked_out_elsewhere_true_when_different_dir() -> Result<()> {
+        let temp_repo = tempdir()?;
+        let temp_worktree = tempdir()?;
+        let repo = GitRepo::new(temp_repo.path().to_path_buf());
+        let branch = Branch {
+            refname: "feature".into(),
+            upstream: None,
+            worktree_path: Some(temp_worktree.path().to_path_buf()),
+        };
+
+        assert!(branch_checked_out_elsewhere(&branch, &repo));
         Ok(())
     }
 }

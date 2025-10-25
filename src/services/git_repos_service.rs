@@ -61,12 +61,18 @@ impl GitReposService {
             });
         }
 
-        let status_result = self.git_status_result(dir)?;
-        if !matches!(status_result, GitResult::Clean) {
-            return Ok(status_result);
+        match self.git_status_result(dir)? {
+            GitResult::Clean => {}
+            other => return Ok(other),
         }
 
-        let branches = GitRepo::new(dir.to_path_buf()).get_branches()?;
+        let repo = GitRepo::new(dir.to_path_buf());
+
+        if let Some(worktree) = repo.find_dirty_worktree()? {
+            return Ok(GitResult::Dirty(worktree.path));
+        }
+
+        let branches = repo.get_branches()?;
         let branches_needing_action: Vec<Branch> = branches
             .into_iter()
             .filter(|branch| branch.needs_action())
@@ -95,15 +101,15 @@ impl GitReposService {
         if output.stdout.is_empty() {
             Ok(GitResult::Clean)
         } else {
-            Ok(GitResult::Dirty)
+            Ok(GitResult::Dirty(dir.to_path_buf()))
         }
     }
 
     fn handle_non_clean_repo_result(&self, result_with_path: ResultWithPath) -> Result<TaskResult> {
         match result_with_path.result {
-            GitResult::Dirty => {
-                eprintln!("Dirty git repository: {}", result_with_path.path.display());
-                Ok(TaskResult::ShellActionRequired(result_with_path.path))
+            GitResult::Dirty(path) => {
+                eprintln!("Dirty git worktree: {}", path.display());
+                Ok(TaskResult::ShellActionRequired(path))
             }
             GitResult::NotGitRepository => {
                 eprintln!("Not a git repository: {}", result_with_path.path.display());
@@ -135,7 +141,7 @@ impl GitReposService {
 #[derive(Debug)]
 enum GitResult {
     Clean,
-    Dirty,
+    Dirty(PathBuf),
     NotGitRepository,
     NotDirectory,
     BranchesNeedingAction(Vec<Branch>),
