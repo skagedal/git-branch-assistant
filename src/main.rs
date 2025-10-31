@@ -12,7 +12,7 @@ mod task_result;
 mod ui;
 
 #[derive(Parser)]
-#[command(name = "git-branch-assistant-rust")]
+#[command(name = "git-branch-assistant")]
 #[command(about = "Helper commands for managing git branches", version)]
 struct Cli {
     #[command(subcommand)]
@@ -22,17 +22,17 @@ struct Cli {
 #[derive(Subcommand)]
 enum Command {
     /// Inspect the current repository and suggest actions for local branches.
-    GitClean,
+    Clean,
     /// Inspect child directories and highlight git repositories needing attention.
-    GitRepos,
+    Repos,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::GitClean => commands::git_clean::run()?,
-        Command::GitRepos => {
+        Command::Clean => commands::git_clean::run()?,
+        Command::Repos => {
             let exit_code = commands::git_repos::run()?;
             std::process::exit(exit_code);
         }

@@ -4,7 +4,7 @@
 
 ## Git cleanup
 
-The `git-branch-assistant git-clean` command cleans up branches in the git repository of the current working directory.
+The `git-branch-assistant clean` command cleans up branches in the git repository of the current working directory.
 
 It compares each branch to its upstream and takes different actions depending on the current state. It uses the following
 command to list each branch along with its upstream - try it out in your git repository:
@@ -97,13 +97,13 @@ This usually happens when a pull request has been merged, so the default suggest
 
 ## Git repos management
 
-The `git-branch-assistant git-repos` command provides batch management for multiple git repositories. When run from a directory containing multiple git repositories (as subdirectories), it will:
+The `git-branch-assistant repos` command provides batch management for multiple git repositories. When run from a directory containing multiple git repositories (as subdirectories), it will:
 
 1. Scan all subdirectories in the current directory
 2. Check each directory to see if it's a git repository
 3. For each repository, check its status:
    - **Dirty repositories**: Repositories with uncommitted changes are reported so you can review them
-   - **Branches needing action**: Repositories where branches need syncing with upstreams are automatically processed using the same logic as `git-clean`
+   - **Branches needing action**: Repositories where branches need syncing with upstreams are automatically processed using the same logic as `clean`
 
 This command is particularly useful when you maintain multiple related repositories and want to ensure they're all in a clean, synchronized state. It will interactively handle any repositories that need attention, allowing you to quickly clean up branches across your entire workspace.
 
