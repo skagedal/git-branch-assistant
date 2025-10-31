@@ -5,6 +5,8 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
 
+use crate::services::git_repos_service::GitResult;
+
 #[derive(Debug, Clone)]
 pub struct Branch {
     pub refname: String,
@@ -34,7 +36,7 @@ pub struct Worktree {
 }
 
 impl Worktree {
-    pub fn is_dirty(&self) -> Result<bool> {
+    pub fn get_status(&self) -> Result<GitResult> {
         let output = Command::new("git")
             .arg("status")
             .arg("--porcelain")
@@ -44,13 +46,14 @@ impl Worktree {
             .with_context(|| format!("failed to run git status in {}", self.path.display()))?;
 
         if !output.status.success() {
-            return Err(anyhow!(
-                "git status returned non-zero status in {}",
-                self.path.display()
-            ));
+            return Ok(GitResult::NotGitRepository);
         }
 
-        Ok(!output.stdout.is_empty())
+        Ok(if output.stdout.is_empty() {
+            GitResult::Clean
+        } else {
+            GitResult::Dirty(self.path.clone())
+        })
     }
 }
 
@@ -124,8 +127,9 @@ impl GitRepo {
 
     pub fn find_dirty_worktree(&self) -> Result<Option<Worktree>> {
         for worktree in self.worktrees()? {
-            if worktree.is_dirty()? {
-                return Ok(Some(worktree));
+            match worktree.get_status()? {
+                GitResult::Clean => {}
+                _ => return Ok(Some(worktree)),
             }
         }
         Ok(None)

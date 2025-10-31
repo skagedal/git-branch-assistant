@@ -1,8 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
-
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use crate::cleaner::GitCleaner;
 use crate::fs_utils::is_globally_ignored;
@@ -61,11 +59,6 @@ impl GitReposService {
             });
         }
 
-        match self.git_status_result(dir)? {
-            GitResult::Clean => {}
-            other => return Ok(other),
-        }
-
         let repo = GitRepo::new(dir.to_path_buf());
 
         if let Some(worktree) = repo.find_dirty_worktree()? {
@@ -82,26 +75,6 @@ impl GitReposService {
             Ok(GitResult::Clean)
         } else {
             Ok(GitResult::BranchesNeedingAction(branches_needing_action))
-        }
-    }
-
-    fn git_status_result(&self, dir: &Path) -> Result<GitResult> {
-        let output = Command::new("git")
-            .arg("status")
-            .arg("--porcelain")
-            .arg("-unormal")
-            .current_dir(dir)
-            .output()
-            .with_context(|| format!("failed to run git status in {}", dir.display()))?;
-
-        if !output.status.success() {
-            return Ok(GitResult::NotGitRepository);
-        }
-
-        if output.stdout.is_empty() {
-            Ok(GitResult::Clean)
-        } else {
-            Ok(GitResult::Dirty(dir.to_path_buf()))
         }
     }
 
@@ -139,7 +112,7 @@ impl GitReposService {
 }
 
 #[derive(Debug)]
-enum GitResult {
+pub enum GitResult {
     Clean,
     Dirty(PathBuf),
     NotGitRepository,
