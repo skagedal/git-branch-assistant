@@ -3,12 +3,18 @@ name = "git-branch-assistant"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = []
+git2-backend = ["git2"]
+timings = []
+
 [dependencies]
 anyhow = "*"
 clap = { version = "*", features = ["derive"] }
 dialoguer = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
+git2 = { version = "*", optional = true }
 
 [dev-dependencies]
 tempfile = "*"

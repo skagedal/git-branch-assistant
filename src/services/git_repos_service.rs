@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use anyhow::Result;
+#[cfg(feature = "timings")]
+use std::time::Instant;
 
 use crate::cleaner::GitCleaner;
 use crate::fs_utils::is_globally_ignored;
@@ -51,31 +53,48 @@ impl GitReposService {
     }
 
     fn repo_result(&self, dir: &Path) -> Result<GitResult> {
-        if !dir.is_dir() {
-            return Ok(if is_globally_ignored(dir) {
+        #[cfg(feature = "timings")]
+        let start = Instant::now();
+
+        let result = if !dir.is_dir() {
+            if is_globally_ignored(dir) {
                 GitResult::Clean
             } else {
                 GitResult::NotDirectory
-            });
-        }
-
-        let repo = GitRepo::new(dir.to_path_buf());
-
-        if let Some(worktree) = repo.find_dirty_worktree()? {
-            return Ok(GitResult::Dirty(worktree.path));
-        }
-
-        let branches = repo.get_branches()?;
-        let branches_needing_action: Vec<Branch> = branches
-            .into_iter()
-            .filter(|branch| branch.needs_action())
-            .collect();
-
-        if branches_needing_action.is_empty() {
-            Ok(GitResult::Clean)
+            }
         } else {
-            Ok(GitResult::BranchesNeedingAction(branches_needing_action))
+            let repo = GitRepo::new(dir.to_path_buf());
+
+            let result = if let Some(worktree) = repo.find_dirty_worktree()? {
+                GitResult::Dirty(worktree.path)
+            } else {
+                let branches = repo.get_branches()?;
+                let branches_needing_action: Vec<Branch> = branches
+                    .into_iter()
+                    .filter(|branch| branch.needs_action())
+                    .collect();
+
+                if branches_needing_action.is_empty() {
+                    GitResult::Clean
+                } else {
+                    GitResult::BranchesNeedingAction(branches_needing_action)
+                }
+            };
+
+            result
+        };
+
+        #[cfg(feature = "timings")]
+        {
+            eprintln!(
+                "[timing] repo_result {} => {} ({:?})",
+                dir.display(),
+                summarize_git_result(&result),
+                start.elapsed()
+            );
         }
+
+        Ok(result)
     }
 
     fn handle_non_clean_repo_result(&self, result_with_path: ResultWithPath) -> Result<TaskResult> {
@@ -118,6 +137,17 @@ pub enum GitResult {
     NotGitRepository,
     NotDirectory,
     BranchesNeedingAction(Vec<Branch>),
+}
+
+#[cfg(feature = "timings")]
+fn summarize_git_result(result: &GitResult) -> &'static str {
+    match result {
+        GitResult::Clean => "Clean",
+        GitResult::Dirty(_) => "Dirty",
+        GitResult::NotGitRepository => "NotGitRepository",
+        GitResult::NotDirectory => "NotDirectory",
+        GitResult::BranchesNeedingAction(_) => "BranchesNeedingAction",
+    }
 }
 
 struct ResultWithPath {
