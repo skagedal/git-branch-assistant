@@ -177,7 +177,7 @@ impl<P: Prompt> GitCleaner<P> {
                     print_worktree_redirect(branch, &path);
                     return Ok(ActionResult::ExitToShell(path));
                 }
-                repo.checkout_first_available_branch(&["release", "master", "main"])?;
+                repo.checkout_default_branch()?;
                 repo.delete_branch_forcefully(&branch.refname)?;
                 Ok(ActionResult::Handled)
             }

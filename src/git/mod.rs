@@ -198,13 +198,10 @@ impl GitRepo {
         Ok(())
     }
 
-    pub fn checkout_first_available_branch(&self, branches: &[&str]) -> Result<()> {
-        for branch in branches {
-            if self.run_interactive_status("git", &["checkout", branch])? {
-                return Ok(());
-            }
-        }
-        Err(anyhow!("no available branch could be checked out"))
+    pub fn checkout_default_branch(&self) -> Result<()> {
+        let branch = self.init_default_branch()?;
+        self.checkout_branch(&branch)
+            .with_context(|| format!("failed to checkout default branch '{}'", branch))
     }
 
     #[cfg(not(feature = "git2-backend"))]
@@ -277,6 +274,19 @@ impl GitRepo {
         Ok(response.default_branch_ref.name.trim().to_string())
     }
 
+    fn init_default_branch(&self) -> Result<String> {
+        match self.run_and_capture("git", &["config", "--get", "init.defaultBranch"]) {
+            Ok(branch) => {
+                let branch = branch.trim();
+                if !branch.is_empty() {
+                    return Ok(branch.to_string());
+                }
+                Ok("main".to_string())
+            }
+            Err(_) => Ok("main".to_string()),
+        }
+    }
+
     fn run_and_capture(&self, program: &str, args: &[&str]) -> Result<String> {
         let output = self
             .command(program)
@@ -321,15 +331,6 @@ impl GitRepo {
     fn run_interactive_printing(&self, program: &str, args: &[&str]) -> Result<()> {
         println!("{}", format_command(program, args));
         self.run_interactive(program, args)
-    }
-
-    fn run_interactive_status(&self, program: &str, args: &[&str]) -> Result<bool> {
-        let status = self
-            .command(program)
-            .args(args)
-            .status()
-            .with_context(|| format!("failed to run {}", format_command(program, args)))?;
-        Ok(status.success())
     }
 
     fn command(&self, program: &str) -> Command {
