@@ -8,16 +8,16 @@ use crate::cleaner::GitCleaner;
 use crate::fs_utils::is_globally_ignored;
 use crate::git::{Branch, GitRepo};
 use crate::task_result::TaskResult;
-use crate::ui::DialoguerPrompt;
+use crate::ui::{DialoguerPrompt, DryRunPrompt};
 
 pub struct GitReposService {
-    prompt: DialoguerPrompt,
+    dry_run: bool,
 }
 
 impl GitReposService {
-    pub fn new() -> Self {
+    pub fn new_with_dry_run(dry_run: bool) -> Self {
         Self {
-            prompt: DialoguerPrompt::default(),
+            dry_run,
         }
     }
 
@@ -100,31 +100,58 @@ impl GitReposService {
     fn handle_non_clean_repo_result(&self, result_with_path: ResultWithPath) -> Result<TaskResult> {
         match result_with_path.result {
             GitResult::Dirty(path) => {
-                eprintln!("Dirty git worktree: {}", path.display());
-                Ok(TaskResult::ShellActionRequired(path))
+                if self.dry_run {
+                    println!("[DRY RUN] Dirty git worktree: {}", path.display());
+                    Ok(TaskResult::Proceed)
+                } else {
+                    eprintln!("Dirty git worktree: {}", path.display());
+                    Ok(TaskResult::ShellActionRequired(path))
+                }
             }
             GitResult::NotGitRepository => {
-                eprintln!("Not a git repository: {}", result_with_path.path.display());
-                Ok(TaskResult::ShellActionRequired(result_with_path.path))
+                if self.dry_run {
+                    println!("[DRY RUN] Not a git repository: {}", result_with_path.path.display());
+                    Ok(TaskResult::Proceed)
+                } else {
+                    eprintln!("Not a git repository: {}", result_with_path.path.display());
+                    Ok(TaskResult::ShellActionRequired(result_with_path.path))
+                }
             }
             GitResult::NotDirectory => {
-                eprintln!("Not a directory: {}", result_with_path.path.display());
-                let parent = result_with_path
-                    .path
-                    .parent()
-                    .map(Path::to_path_buf)
-                    .unwrap_or_else(|| result_with_path.path.clone());
-                Ok(TaskResult::ShellActionRequired(parent))
+                if self.dry_run {
+                    println!("[DRY RUN] Not a directory: {}", result_with_path.path.display());
+                    Ok(TaskResult::Proceed)
+                } else {
+                    eprintln!("Not a directory: {}", result_with_path.path.display());
+                    let parent = result_with_path
+                        .path
+                        .parent()
+                        .map(Path::to_path_buf)
+                        .unwrap_or_else(|| result_with_path.path.clone());
+                    Ok(TaskResult::ShellActionRequired(parent))
+                }
             }
             GitResult::Clean => Ok(TaskResult::Proceed),
             GitResult::BranchesNeedingAction(branches) => {
-                eprintln!(
-                    "Has branches needing action: {}",
-                    result_with_path.path.display()
-                );
+                if self.dry_run {
+                    println!(
+                        "[DRY RUN] Has branches needing action: {}",
+                        result_with_path.path.display()
+                    );
+                } else {
+                    eprintln!(
+                        "Has branches needing action: {}",
+                        result_with_path.path.display()
+                    );
+                }
                 let repo = GitRepo::new(result_with_path.path);
-                let cleaner = GitCleaner::new(self.prompt.clone());
-                cleaner.handle(&repo, branches)
+                if self.dry_run {
+                    let cleaner = GitCleaner::new_with_dry_run(DryRunPrompt::default(), true);
+                    cleaner.handle(&repo, branches)
+                } else {
+                    let cleaner = GitCleaner::new(DialoguerPrompt::default());
+                    cleaner.handle(&repo, branches)
+                }
             }
         }
     }

@@ -10,18 +10,27 @@ use crate::ui::Prompt;
 #[derive(Clone)]
 pub struct GitCleaner<P: Prompt> {
     prompt: P,
+    dry_run: bool,
 }
 
 impl<P: Prompt> GitCleaner<P> {
     pub fn new(prompt: P) -> Self {
-        Self { prompt }
+        Self { prompt, dry_run: false }
+    }
+
+    pub fn new_with_dry_run(prompt: P, dry_run: bool) -> Self {
+        Self { prompt, dry_run }
     }
 
     pub fn handle(&self, repo: &GitRepo, branches: Vec<Branch>) -> Result<TaskResult> {
         if let Some(worktree) = repo.find_dirty_worktree()? {
             let path = worktree.path;
-            eprintln!("Dirty git worktree: {}", path.display());
-            return Ok(TaskResult::ShellActionRequired(path));
+            if self.dry_run {
+                println!("[DRY RUN] Dirty git worktree: {}", path.display());
+            } else {
+                eprintln!("Dirty git worktree: {}", path.display());
+                return Ok(TaskResult::ShellActionRequired(path));
+            }
         }
 
         let mut result = TaskResult::Proceed;
@@ -40,63 +49,97 @@ impl<P: Prompt> GitCleaner<P> {
                 UpstreamStatus::Identical => Ok(TaskResult::Proceed),
                 UpstreamStatus::UpstreamIsAheadOfLocal => {
                     if let Some(path) = worktree_elsewhere_path(branch, repo) {
-                        print_worktree_redirect(branch, &path);
-                        Ok(TaskResult::ShellActionRequired(path))
+                        if self.dry_run {
+                            println!("[DRY RUN] {}: Upstream is ahead (checked out elsewhere)", branch.refname);
+                            Ok(TaskResult::Proceed)
+                        } else {
+                            print_worktree_redirect(branch, &path);
+                            Ok(TaskResult::ShellActionRequired(path))
+                        }
                     } else {
-                        repo.rebase(&branch.refname, &upstream.name)?;
-                        Ok(TaskResult::Proceed)
+                        if self.dry_run {
+                            println!("[DRY RUN] {}: Upstream is ahead, would rebase", branch.refname);
+                            Ok(TaskResult::Proceed)
+                        } else {
+                            repo.rebase(&branch.refname, &upstream.name)?;
+                            Ok(TaskResult::Proceed)
+                        }
                     }
                 }
-                UpstreamStatus::LocalIsAheadOfUpstream => self.select_action(
-                    repo,
-                    branch,
-                    "Branch is ahead of upstream",
-                    &[
-                        BranchAction::Push,
-                        BranchAction::Log,
-                        BranchAction::Shell,
-                        BranchAction::Nothing,
-                    ],
-                ),
-                UpstreamStatus::MergeNeeded => self.select_action(
-                    repo,
-                    branch,
-                    "Different commits on local and upstream",
-                    &[
-                        BranchAction::Rebase,
-                        BranchAction::Log,
-                        BranchAction::Delete,
-                        BranchAction::Shell,
-                        BranchAction::Nothing,
-                    ],
-                ),
-                UpstreamStatus::UpstreamIsGone => {
-                    let mut actions = vec![
-                        BranchAction::Delete,
-                        BranchAction::Log,
-                        BranchAction::Shell,
-                        BranchAction::Nothing,
-                    ];
-                    if branch_checked_out_elsewhere(branch, repo) {
-                        actions.insert(0, BranchAction::DeleteWorktreeAndBranch);
+                UpstreamStatus::LocalIsAheadOfUpstream => {
+                    if self.dry_run {
+                        println!("[DRY RUN] {}: Branch is ahead of upstream", branch.refname);
+                        Ok(TaskResult::Proceed)
+                    } else {
+                        self.select_action(
+                            repo,
+                            branch,
+                            "Branch is ahead of upstream",
+                            &[
+                                BranchAction::Push,
+                                BranchAction::Log,
+                                BranchAction::Shell,
+                                BranchAction::Nothing,
+                            ],
+                        )
                     }
-                    self.select_action(repo, branch, "Upstream is set, but it is gone", &actions)
+                }
+                UpstreamStatus::MergeNeeded => {
+                    if self.dry_run {
+                        println!("[DRY RUN] {}: Different commits on local and upstream", branch.refname);
+                        Ok(TaskResult::Proceed)
+                    } else {
+                        self.select_action(
+                            repo,
+                            branch,
+                            "Different commits on local and upstream",
+                            &[
+                                BranchAction::Rebase,
+                                BranchAction::Log,
+                                BranchAction::Delete,
+                                BranchAction::Shell,
+                                BranchAction::Nothing,
+                            ],
+                        )
+                    }
+                }
+                UpstreamStatus::UpstreamIsGone => {
+                    if self.dry_run {
+                        println!("[DRY RUN] {}: Upstream is set, but it is gone", branch.refname);
+                        Ok(TaskResult::Proceed)
+                    } else {
+                        let mut actions = vec![
+                            BranchAction::Delete,
+                            BranchAction::Log,
+                            BranchAction::Shell,
+                            BranchAction::Nothing,
+                        ];
+                        if branch_checked_out_elsewhere(branch, repo) {
+                            actions.insert(0, BranchAction::DeleteWorktreeAndBranch);
+                        }
+                        self.select_action(repo, branch, "Upstream is set, but it is gone", &actions)
+                    }
                 }
             }
         } else {
-            self.select_action(
-                repo,
-                branch,
-                "Branch has no upstream",
-                &[
-                    BranchAction::CreatePr,
-                    BranchAction::PushCreatingOrigin,
-                    BranchAction::Delete,
-                    BranchAction::Log,
-                    BranchAction::Shell,
-                    BranchAction::Nothing,
-                ],
-            )
+            if self.dry_run {
+                println!("[DRY RUN] {}: Branch has no upstream", branch.refname);
+                Ok(TaskResult::Proceed)
+            } else {
+                self.select_action(
+                    repo,
+                    branch,
+                    "Branch has no upstream",
+                    &[
+                        BranchAction::CreatePr,
+                        BranchAction::PushCreatingOrigin,
+                        BranchAction::Delete,
+                        BranchAction::Log,
+                        BranchAction::Shell,
+                        BranchAction::Nothing,
+                    ],
+                )
+            }
         }
     }
 

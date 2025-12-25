@@ -25,3 +25,15 @@ impl Prompt for DialoguerPrompt {
         selection.ok_or_else(|| anyhow!("no selection was made"))
     }
 }
+
+#[derive(Default, Clone)]
+pub struct DryRunPrompt;
+
+impl Prompt for DryRunPrompt {
+    fn select(&self, message: &str, _options: &[String]) -> Result<usize> {
+        println!("[DRY RUN] Would prompt: {}", message);
+        // Always select "Do nothing" which is typically the last option
+        // This is a fallback - ideally GitCleaner won't call this in dry mode
+        Err(anyhow!("dry run mode - no interactive selections"))
+    }
+}
