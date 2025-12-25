@@ -1,4 +1,5 @@
 use std::env;
+use std::path::PathBuf;
 
 use anyhow::Result;
 
@@ -6,8 +7,11 @@ use crate::repository::Repository;
 use crate::services::git_repos_service::GitReposService;
 use crate::task_result::TaskResult;
 
-pub fn run() -> Result<i32> {
-    let path = env::current_dir()?.canonicalize()?;
+pub fn run(path: Option<PathBuf>) -> Result<i32> {
+    let path = path
+        .map(Ok)
+        .unwrap_or_else(env::current_dir)?
+        .canonicalize()?;
     let service = GitReposService::new();
     let result = service.handle_all_git_repos(&path)?;
 
