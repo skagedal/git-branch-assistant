@@ -204,18 +204,6 @@ impl GitRepo {
             .with_context(|| format!("failed to checkout default branch '{}'", branch))
     }
 
-    pub fn checkout_first_available_branch(&self, branches: &[&str]) -> Result<()> {
-        if branches.is_empty() {
-            return Err(anyhow!("no branches available to checkout"));
-        }
-
-        match self.checkout_branch(branches[0]) {
-            Ok(()) => Ok(()),
-            Err(_) if branches.len() > 1 => self.checkout_first_available_branch(&branches[1..]),
-            Err(e) => Err(e),
-        }
-    }
-
     #[cfg(not(feature = "git2-backend"))]
     fn get_upstream_status(&self, local: &str, upstream: &str) -> Result<UpstreamStatus> {
         if !self.branch_exists(upstream)? {

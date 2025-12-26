@@ -83,17 +83,6 @@ mod tests {
         Ok(GitRepo::new(repo_path))
     }
 
-    fn get_current_branch(repo: &GitRepo) -> Result<String> {
-        let output = Command::new("git")
-            .arg("rev-parse")
-            .arg("--abbrev-ref")
-            .arg("HEAD")
-            .current_dir(repo.dir())
-            .output()?;
-
-        Ok(String::from_utf8(output.stdout)?.trim().to_string())
-    }
-
     #[test]
     fn test_getting_branches() -> Result<()> {
         let repo = test_repo("repo-with-some-branches")?;
@@ -102,16 +91,6 @@ mod tests {
         refnames.sort();
 
         assert_eq!(refnames, vec!["existing", "master"]);
-        Ok(())
-    }
-
-    #[test]
-    fn test_switching_branches() -> Result<()> {
-        let repo = test_repo("repo-with-some-branches")?;
-        repo.checkout_first_available_branch(&["foo", "existing"])?;
-
-        let current_branch = get_current_branch(&repo)?;
-        assert_eq!(current_branch, "existing");
         Ok(())
     }
 }
