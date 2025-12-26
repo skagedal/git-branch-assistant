@@ -4,6 +4,7 @@ mod tests {
     use crate::git::{Branch, GitRepo, Upstream, UpstreamStatus};
     use anyhow::Result;
     use std::path::PathBuf;
+    use std::process::Command;
 
     #[test]
     fn branch_needs_action_when_no_upstream() {
@@ -57,6 +58,60 @@ mod tests {
         assert_eq!(worktrees[0].branch.as_deref(), Some("main"));
         assert_eq!(worktrees[1].path, PathBuf::from("/repo/feature"));
         assert_eq!(worktrees[1].branch.as_deref(), Some("feature"));
+        Ok(())
+    }
+
+    fn test_repo(repo_name: &str) -> Result<GitRepo> {
+        let temp_dir = tempfile::tempdir()?;
+        let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("resources")
+            .join(format!("{}.tar.gz", repo_name));
+
+        let status = Command::new("tar")
+            .arg("xzf")
+            .arg(&tarball_path)
+            .current_dir(temp_dir.path())
+            .status()?;
+
+        if !status.success() {
+            return Err(anyhow::anyhow!("tar extraction failed"));
+        }
+
+        let repo_path = temp_dir.path().join(repo_name);
+        let _ = temp_dir.keep();
+        Ok(GitRepo::new(repo_path))
+    }
+
+    fn get_current_branch(repo: &GitRepo) -> Result<String> {
+        let output = Command::new("git")
+            .arg("rev-parse")
+            .arg("--abbrev-ref")
+            .arg("HEAD")
+            .current_dir(repo.dir())
+            .output()?;
+
+        Ok(String::from_utf8(output.stdout)?.trim().to_string())
+    }
+
+    #[test]
+    fn test_getting_branches() -> Result<()> {
+        let repo = test_repo("repo-with-some-branches")?;
+        let branches = repo.get_branches()?;
+        let mut refnames: Vec<String> = branches.iter().map(|b| b.refname.clone()).collect();
+        refnames.sort();
+
+        assert_eq!(refnames, vec!["existing", "master"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_switching_branches() -> Result<()> {
+        let repo = test_repo("repo-with-some-branches")?;
+        repo.checkout_first_available_branch(&["foo", "existing"])?;
+
+        let current_branch = get_current_branch(&repo)?;
+        assert_eq!(current_branch, "existing");
         Ok(())
     }
 }
