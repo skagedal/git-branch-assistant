@@ -65,7 +65,7 @@ mod tests {
         let temp_dir = tempfile::tempdir()?;
         let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
-            .join("resources")
+            .join("fixtures")
             .join(format!("{}.tar.gz", repo_name));
 
         let status = Command::new("tar")
