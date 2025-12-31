@@ -102,7 +102,6 @@ The `git-branch-assistant repos` command provides batch management for multiple 
 1. Scan all subdirectories in the current directory
 2. Check each directory to see if it's a git repository
 3. For each repository, check its status:
-   - **Dirty repositories**: Repositories with uncommitted changes are reported so you can review them
    - **Branches needing action**: Repositories where branches need syncing with upstreams are automatically processed using the same logic as `clean`
 
 This command is particularly useful when you maintain multiple related repositories and want to ensure they're all in a clean, synchronized state. It will interactively handle any repositories that need attention, allowing you to quickly clean up branches across your entire workspace.

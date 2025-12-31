@@ -23,16 +23,6 @@ impl<P: Prompt> GitCleaner<P> {
     }
 
     pub fn handle(&self, repo: &GitRepo, branches: Vec<Branch>) -> Result<TaskResult> {
-        if let Some(worktree) = repo.find_dirty_worktree()? {
-            let path = worktree.path;
-            if self.dry_run {
-                println!("[DRY RUN] Dirty git worktree: {}", path.display());
-            } else {
-                eprintln!("Dirty git worktree: {}", path.display());
-                return Ok(TaskResult::ShellActionRequired(path));
-            }
-        }
-
         let mut result = TaskResult::Proceed;
         for branch in branches {
             if !matches!(result, TaskResult::Proceed) {

@@ -94,16 +94,4 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_dirty_repository_detection() -> Result<()> {
-        let dirty_repo = test_repo("repo-with-dirty-status")?;
-        let dirty_worktree = dirty_repo.find_dirty_worktree()?;
-        assert!(dirty_worktree.is_some(), "Expected dirty repository to be detected");
-
-        let clean_repo = test_repo("repo-with-some-branches")?;
-        let clean_worktree = clean_repo.find_dirty_worktree()?;
-        assert!(clean_worktree.is_none(), "Expected clean repository to have no dirty worktree");
-
-        Ok(())
-    }
 }

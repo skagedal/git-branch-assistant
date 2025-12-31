@@ -1,6 +1,6 @@
+use anyhow::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
-use anyhow::Result;
 #[cfg(feature = "timings")]
 use std::time::Instant;
 
@@ -16,9 +16,7 @@ pub struct GitReposService {
 
 impl GitReposService {
     pub fn new_with_dry_run(dry_run: bool) -> Self {
-        Self {
-            dry_run,
-        }
+        Self { dry_run }
     }
 
     pub fn handle_all_git_repos(&self, path: &Path) -> Result<TaskResult> {
@@ -64,24 +62,17 @@ impl GitReposService {
             }
         } else {
             let repo = GitRepo::new(dir.to_path_buf());
+            let branches = repo.get_branches()?;
+            let branches_needing_action: Vec<Branch> = branches
+                .into_iter()
+                .filter(|branch| branch.needs_action())
+                .collect();
 
-            let result = if let Some(worktree) = repo.find_dirty_worktree()? {
-                GitResult::Dirty(worktree.path)
+            if branches_needing_action.is_empty() {
+                GitResult::Clean
             } else {
-                let branches = repo.get_branches()?;
-                let branches_needing_action: Vec<Branch> = branches
-                    .into_iter()
-                    .filter(|branch| branch.needs_action())
-                    .collect();
-
-                if branches_needing_action.is_empty() {
-                    GitResult::Clean
-                } else {
-                    GitResult::BranchesNeedingAction(branches_needing_action)
-                }
-            };
-
-            result
+                GitResult::BranchesNeedingAction(branches_needing_action)
+            }
         };
 
         #[cfg(feature = "timings")]
@@ -99,18 +90,12 @@ impl GitReposService {
 
     fn handle_non_clean_repo_result(&self, result_with_path: ResultWithPath) -> Result<TaskResult> {
         match result_with_path.result {
-            GitResult::Dirty(path) => {
-                if self.dry_run {
-                    println!("[DRY RUN] Dirty git worktree: {}", path.display());
-                    Ok(TaskResult::Proceed)
-                } else {
-                    eprintln!("Dirty git worktree: {}", path.display());
-                    Ok(TaskResult::ShellActionRequired(path))
-                }
-            }
             GitResult::NotGitRepository => {
                 if self.dry_run {
-                    println!("[DRY RUN] Not a git repository: {}", result_with_path.path.display());
+                    println!(
+                        "[DRY RUN] Not a git repository: {}",
+                        result_with_path.path.display()
+                    );
                     Ok(TaskResult::Proceed)
                 } else {
                     eprintln!("Not a git repository: {}", result_with_path.path.display());
@@ -119,7 +104,10 @@ impl GitReposService {
             }
             GitResult::NotDirectory => {
                 if self.dry_run {
-                    println!("[DRY RUN] Not a directory: {}", result_with_path.path.display());
+                    println!(
+                        "[DRY RUN] Not a directory: {}",
+                        result_with_path.path.display()
+                    );
                     Ok(TaskResult::Proceed)
                 } else {
                     eprintln!("Not a directory: {}", result_with_path.path.display());
@@ -160,7 +148,6 @@ impl GitReposService {
 #[derive(Debug)]
 pub enum GitResult {
     Clean,
-    Dirty(PathBuf),
     NotGitRepository,
     NotDirectory,
     BranchesNeedingAction(Vec<Branch>),
@@ -170,7 +157,6 @@ pub enum GitResult {
 fn summarize_git_result(result: &GitResult) -> &'static str {
     match result {
         GitResult::Clean => "Clean",
-        GitResult::Dirty(_) => "Dirty",
         GitResult::NotGitRepository => "NotGitRepository",
         GitResult::NotDirectory => "NotDirectory",
         GitResult::BranchesNeedingAction(_) => "BranchesNeedingAction",

@@ -37,34 +37,6 @@ pub struct Worktree {
     pub branch: Option<String>,
 }
 
-impl Worktree {
-    pub fn get_status(&self) -> Result<GitResult> {
-        #[cfg(feature = "git2-backend")]
-        {
-            return git2_backend::worktree_status(&self.path);
-        }
-
-        #[cfg(not(feature = "git2-backend"))]
-        let output = Command::new("git")
-            .arg("status")
-            .arg("--porcelain")
-            .arg("-unormal")
-            .current_dir(&self.path)
-            .output()
-            .with_context(|| format!("failed to run git status in {}", self.path.display()))?;
-
-        if !output.status.success() {
-            return Ok(GitResult::NotGitRepository);
-        }
-
-        Ok(if output.stdout.is_empty() {
-            GitResult::Clean
-        } else {
-            GitResult::Dirty(self.path.clone())
-        })
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpstreamStatus {
     Identical,
@@ -143,22 +115,6 @@ impl GitRepo {
         let output = self.run_and_capture("git", &["worktree", "list", "--porcelain"])?;
         parse_worktrees(&output)
     }
-
-    pub fn find_dirty_worktree(&self) -> Result<Option<Worktree>> {
-        #[cfg(feature = "git2-backend")]
-        {
-            return git2_backend::find_dirty_worktree(self);
-        }
-
-        for worktree in self.worktrees()? {
-            match worktree.get_status()? {
-                GitResult::Clean => {}
-                _ => return Ok(Some(worktree)),
-            }
-        }
-        Ok(None)
-    }
-
     pub fn push(&self, refname: &str) -> Result<()> {
         self.run_interactive_printing("git", &["push", "origin", refname])
     }
