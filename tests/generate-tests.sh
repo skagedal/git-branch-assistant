@@ -140,15 +140,15 @@ create-diverged-branches() {
     git clone "${upstreams}/${testcase}" "$testcase"
 
     cd "${upstreams}/${testcase}"
-    echo "Upstream commit 1" >> file.txt
-    git add file.txt
+    echo "Upstream changes" > upstream-file.txt
+    git add upstream-file.txt
     git commit -q -m "Upstream commit 1"
     git checkout --detach
 
     cd "${repos}/${testcase}"
     git config commit.gpgsign false
-    echo "Local commit 1" >> file.txt
-    git add file.txt
+    echo "Local changes" > local-file.txt
+    git add local-file.txt
     git commit -q -m "Local commit 1"
     git fetch origin
 }
