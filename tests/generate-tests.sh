@@ -23,6 +23,7 @@ create-no-upstream() {
     echo "Initial commit" > file.txt
     git add file.txt
     git commit -q -m "Initial commit"
+    git checkout --detach
 
     cd "${repos}"
     git clone "${upstreams}/${testcase}" "$testcase"
@@ -51,6 +52,7 @@ create-branches-identical() {
     echo "Initial commit" > file.txt
     git add file.txt
     git commit -q -m "Initial commit"
+    git checkout --detach
 
     cd "${repos}"
     git clone "${upstreams}/${testcase}" "$testcase"
@@ -83,6 +85,7 @@ create-upstream-ahead() {
     echo "Upstream commit 1" >> file.txt
     git add file.txt
     git commit -q -m "Upstream commit 1"
+    git checkout --detach
 
     cd "${repos}/${testcase}"
     git fetch origin
@@ -104,6 +107,7 @@ create-local-ahead() {
     echo "Initial commit" > file.txt
     git add file.txt
     git commit -q -m "Initial commit"
+    git checkout --detach
 
     cd "${repos}"
     git clone "${upstreams}/${testcase}" "$testcase"
@@ -139,6 +143,7 @@ create-diverged-branches() {
     echo "Upstream commit 1" >> file.txt
     git add file.txt
     git commit -q -m "Upstream commit 1"
+    git checkout --detach
 
     cd "${repos}/${testcase}"
     git config commit.gpgsign false
@@ -164,6 +169,7 @@ create-upstream-missing() {
     echo "Initial commit" > file.txt
     git add file.txt
     git commit -q -m "Initial commit"
+    git checkout --detach
 
     cd "${repos}"
     git clone "${upstreams}/${testcase}" "$testcase"
