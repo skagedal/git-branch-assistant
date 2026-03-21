@@ -4,7 +4,6 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
 
-use crate::services::git_repos_service::GitResult;
 
 #[cfg(feature = "git2-backend")]
 mod git2_backend;

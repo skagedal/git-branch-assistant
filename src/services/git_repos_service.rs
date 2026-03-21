@@ -90,18 +90,6 @@ impl GitReposService {
 
     fn handle_non_clean_repo_result(&self, result_with_path: ResultWithPath) -> Result<TaskResult> {
         match result_with_path.result {
-            GitResult::NotGitRepository => {
-                if self.dry_run {
-                    println!(
-                        "[DRY RUN] Not a git repository: {}",
-                        result_with_path.path.display()
-                    );
-                    Ok(TaskResult::Proceed)
-                } else {
-                    eprintln!("Not a git repository: {}", result_with_path.path.display());
-                    Ok(TaskResult::ShellActionRequired(result_with_path.path))
-                }
-            }
             GitResult::NotDirectory => {
                 if self.dry_run {
                     println!(
@@ -148,7 +136,6 @@ impl GitReposService {
 #[derive(Debug)]
 pub enum GitResult {
     Clean,
-    NotGitRepository,
     NotDirectory,
     BranchesNeedingAction(Vec<Branch>),
 }
@@ -157,7 +144,6 @@ pub enum GitResult {
 fn summarize_git_result(result: &GitResult) -> &'static str {
     match result {
         GitResult::Clean => "Clean",
-        GitResult::NotGitRepository => "NotGitRepository",
         GitResult::NotDirectory => "NotDirectory",
         GitResult::BranchesNeedingAction(_) => "BranchesNeedingAction",
     }
