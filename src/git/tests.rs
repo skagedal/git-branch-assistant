@@ -71,6 +71,7 @@ mod tests {
         let status = Command::new("tar")
             .arg("xzf")
             .arg(&tarball_path)
+            .arg("--no-same-owner")
             .current_dir(temp_dir.path())
             .status()?;
 
