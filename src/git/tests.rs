@@ -68,6 +68,8 @@ mod tests {
             .join("fixtures")
             .join(format!("{}.tar.gz", repo_name));
 
+        // --no-same-owner prevents tar (when run as root) from preserving the
+        // fixture's original UID, which would trigger git's safe.directory check.
         let status = Command::new("tar")
             .arg("xzf")
             .arg(&tarball_path)
