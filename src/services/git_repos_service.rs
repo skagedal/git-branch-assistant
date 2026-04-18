@@ -12,11 +12,12 @@ use crate::ui::{DialoguerPrompt, DryRunPrompt};
 
 pub struct GitReposService {
     dry_run: bool,
+    skip_dirty_repos: bool,
 }
 
 impl GitReposService {
-    pub fn new_with_dry_run(dry_run: bool) -> Self {
-        Self { dry_run }
+    pub fn new(dry_run: bool, skip_dirty_repos: bool) -> Self {
+        Self { dry_run, skip_dirty_repos }
     }
 
     pub fn handle_all_git_repos(&self, path: &Path) -> Result<TaskResult> {
@@ -62,6 +63,11 @@ impl GitReposService {
             }
         } else {
             let repo = GitRepo::new(dir.to_path_buf());
+
+            if self.skip_dirty_repos && repo.is_dirty()? {
+                return Ok(GitResult::Clean);
+            }
+
             let branches = repo.get_branches()?;
             let branches_needing_action: Vec<Branch> = branches
                 .into_iter()

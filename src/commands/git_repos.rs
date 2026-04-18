@@ -7,12 +7,12 @@ use crate::repository::Repository;
 use crate::services::git_repos_service::GitReposService;
 use crate::task_result::TaskResult;
 
-pub fn run(path: Option<PathBuf>, dry: bool) -> Result<i32> {
+pub fn run(path: Option<PathBuf>, dry: bool, skip_dirty_repos: bool) -> Result<i32> {
     let path = path
         .map(Ok)
         .unwrap_or_else(env::current_dir)?
         .canonicalize()?;
-    let service = GitReposService::new_with_dry_run(dry);
+    let service = GitReposService::new(dry, skip_dirty_repos);
     let result = service.handle_all_git_repos(&path)?;
 
     let exit_code = match &result {
