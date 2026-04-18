@@ -159,6 +159,16 @@ impl GitRepo {
             .with_context(|| format!("failed to checkout default branch '{}'", branch))
     }
 
+    pub fn is_dirty(&self) -> Result<bool> {
+        #[cfg(feature = "git2-backend")]
+        {
+            return git2_backend::find_dirty_worktree(self).map(|w| w.is_some());
+        }
+
+        let output = self.run_and_capture("git", &["status", "--porcelain"])?;
+        Ok(!output.trim().is_empty())
+    }
+
     #[cfg(not(feature = "git2-backend"))]
     fn get_upstream_status(&self, local: &str, upstream: &str) -> Result<UpstreamStatus> {
         if !self.branch_exists(upstream)? {

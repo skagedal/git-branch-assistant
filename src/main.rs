@@ -40,6 +40,9 @@ enum Command {
         /// Dry run mode - analyze without performing actions or prompting
         #[arg(long)]
         dry: bool,
+        /// Skip repositories with uncommitted changes
+        #[arg(long)]
+        skip_dirty_repos: bool,
     },
 }
 
@@ -48,8 +51,8 @@ fn main() -> Result<()> {
 
     match cli.command {
         Command::Clean { path, dry } => commands::git_clean::run(path, dry)?,
-        Command::Repos { path, dry } => {
-            let exit_code = commands::git_repos::run(path, dry)?;
+        Command::Repos { path, dry, skip_dirty_repos } => {
+            let exit_code = commands::git_repos::run(path, dry, skip_dirty_repos)?;
             std::process::exit(exit_code);
         }
     }
