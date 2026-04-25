@@ -4,15 +4,18 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
 
-
-#[cfg(feature = "git2-backend")]
-mod git2_backend;
-
 #[derive(Debug, Clone)]
 pub struct Branch {
     pub refname: String,
     pub upstream: Option<Upstream>,
     pub worktree_path: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BranchCommitInfo {
+    pub commit_timestamp: i64,
+    pub commit_date: String,
+    pub committer: String,
 }
 
 impl Branch {
@@ -59,11 +62,6 @@ impl GitRepo {
     }
 
     pub fn get_branches(&self) -> Result<Vec<Branch>> {
-        #[cfg(feature = "git2-backend")]
-        {
-            return git2_backend::get_branches(self);
-        }
-
         use std::collections::HashMap;
         let output = self.run_and_capture(
             "git",
@@ -105,12 +103,40 @@ impl GitRepo {
         Ok(branches)
     }
 
-    pub fn worktrees(&self) -> Result<Vec<Worktree>> {
-        #[cfg(feature = "git2-backend")]
-        {
-            return git2_backend::worktrees(self);
-        }
+    pub fn branch_commit_infos(
+        &self,
+    ) -> Result<std::collections::HashMap<String, BranchCommitInfo>> {
+        let output = self.run_and_capture(
+            "git",
+            &[
+                "for-each-ref",
+                "--format=%(refname:short)|%(committerdate:unix)|%(committerdate:short)|%(committername)",
+                "refs/heads/",
+            ],
+        )?;
 
+        let mut map = std::collections::HashMap::new();
+        for line in output.lines().filter(|line| !line.trim().is_empty()) {
+            let parts: Vec<&str> = line.splitn(4, '|').collect();
+            if parts.len() != 4 {
+                return Err(anyhow!("unexpected output from git for-each-ref: {line}"));
+            }
+            let timestamp: i64 = parts[1]
+                .parse()
+                .with_context(|| format!("failed to parse committer timestamp: {}", parts[1]))?;
+            map.insert(
+                parts[0].to_string(),
+                BranchCommitInfo {
+                    commit_timestamp: timestamp,
+                    commit_date: parts[2].to_string(),
+                    committer: parts[3].to_string(),
+                },
+            );
+        }
+        Ok(map)
+    }
+
+    pub fn worktrees(&self) -> Result<Vec<Worktree>> {
         let output = self.run_and_capture("git", &["worktree", "list", "--porcelain"])?;
         parse_worktrees(&output)
     }
@@ -160,16 +186,10 @@ impl GitRepo {
     }
 
     pub fn is_dirty(&self) -> Result<bool> {
-        #[cfg(feature = "git2-backend")]
-        {
-            return git2_backend::find_dirty_worktree(self).map(|w| w.is_some());
-        }
-
         let output = self.run_and_capture("git", &["status", "--porcelain"])?;
         Ok(!output.trim().is_empty())
     }
 
-    #[cfg(not(feature = "git2-backend"))]
     fn get_upstream_status(&self, local: &str, upstream: &str) -> Result<UpstreamStatus> {
         if !self.branch_exists(upstream)? {
             return Ok(UpstreamStatus::UpstreamIsGone);
@@ -184,7 +204,6 @@ impl GitRepo {
         })
     }
 
-    #[cfg(not(feature = "git2-backend"))]
     fn is_ancestor(&self, base: &str, commit: &str) -> Result<bool> {
         let status = self
             .command("git")
@@ -209,7 +228,6 @@ impl GitRepo {
         }
     }
 
-    #[cfg(not(feature = "git2-backend"))]
     fn branch_exists(&self, branch: &str) -> Result<bool> {
         let status = self
             .command("git")

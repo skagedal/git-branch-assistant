@@ -51,7 +51,7 @@ cargo run -- repos --dry        # Dry run repos command
 
 ### Core Components
 
-**GitRepo** (`src/git/mod.rs`): Central abstraction for git operations. Executes git commands via `Command::new("git")` in the repository directory. Has optional `git2-backend` feature flag for using libgit2 instead of shelling out.
+**GitRepo** (`src/git/mod.rs`): Central abstraction for git operations. Executes git commands via `Command::new("git")` in the repository directory.
 
 **GitCleaner** (`src/cleaner.rs`): The core branch management logic. Generic over a `Prompt` trait to enable both interactive UI (DialoguerPrompt) and testing (TestPrompt). Handles each branch based on its upstream status.
 
@@ -105,7 +105,6 @@ Tests in `src/cleaner.rs` use the `TestPrompt` implementation to simulate user s
 
 ### Feature Flags
 
-- `git2-backend`: Use libgit2 instead of shelling out to git (optional)
 - `timings`: Enable timing instrumentation (optional)
 
 ### Error Handling

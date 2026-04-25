@@ -3,11 +3,13 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+mod cache;
 mod cleaner;
 mod commands;
 mod env;
 mod fs_utils;
 mod git;
+mod picker;
 mod repository;
 mod services;
 mod task_result;
@@ -43,6 +45,12 @@ enum Command {
         /// Skip repositories with uncommitted changes
         #[arg(long)]
         skip_dirty_repos: bool,
+        /// List every branch across all repos sorted by oldest commit first
+        #[arg(long)]
+        list: bool,
+        /// With --list, prompt to select a branch to check out
+        #[arg(short, long, requires = "list")]
+        interactive: bool,
     },
 }
 
@@ -51,8 +59,15 @@ fn main() -> Result<()> {
 
     match cli.command {
         Command::Clean { path, dry } => commands::git_clean::run(path, dry)?,
-        Command::Repos { path, dry, skip_dirty_repos } => {
-            let exit_code = commands::git_repos::run(path, dry, skip_dirty_repos)?;
+        Command::Repos {
+            path,
+            dry,
+            skip_dirty_repos,
+            list,
+            interactive,
+        } => {
+            let exit_code =
+                commands::git_repos::run(path, dry, skip_dirty_repos, list, interactive)?;
             std::process::exit(exit_code);
         }
     }

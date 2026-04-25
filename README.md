@@ -106,6 +106,21 @@ The `git-branch-assistant repos` command provides batch management for multiple 
 
 This command is particularly useful when you maintain multiple related repositories and want to ensure they're all in a clean, synchronized state. It will interactively handle any repositories that need attention, allowing you to quickly clean up branches across your entire workspace.
 
+### Listing branches across repos
+
+Pass `--list` to skip the cleaning flow and instead print one row per local branch found across every repo, sorted by the date of the latest commit (oldest first):
+
+```
+$ git-branch-assistant repos --list
+2023-08-12  no upstream  alice    repo-a/old-experiment
+2024-01-04  diverged     alice    repo-b/feature-x
+2024-09-20  ok           bob      repo-c/main
+```
+
+Add `--interactive` (`-i`) to pick a branch from the list. The selected branch is checked out in its repo, and the repo path is written to the suggested-cd file (just like the existing flow), so a shell wrapper can `cd` into it.
+
+In interactive mode the listing is also cached under `$XDG_CACHE_HOME/git-branch-assistant/branches/` (or `~/.cache/...`), keyed by the directory the command was invoked from. If a fresh cache (less than an hour old) is available, the picker opens immediately on the cached data, runs a background rescan with a `Refreshing...` indicator, and updates the list in place when the rescan finishes — keeping the cursor on the same branch when it still exists, or falling back to the first entry otherwise.
+
 ---
 
 [^1]: See for example [myrepos](https://myrepos.branchable.com/) and its list of [related tools](https://myrepos.branchable.com/related/)

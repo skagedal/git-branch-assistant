@@ -17,7 +17,10 @@ pub struct GitReposService {
 
 impl GitReposService {
     pub fn new(dry_run: bool, skip_dirty_repos: bool) -> Self {
-        Self { dry_run, skip_dirty_repos }
+        Self {
+            dry_run,
+            skip_dirty_repos,
+        }
     }
 
     pub fn handle_all_git_repos(&self, path: &Path) -> Result<TaskResult> {

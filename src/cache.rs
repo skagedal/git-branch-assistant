@@ -1,0 +1,150 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+
+use crate::services::git_repos_list_service::BranchListEntry;
+
+const CACHE_TTL_SECS: i64 = 3600;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct BranchCache {
+    invocation_path: PathBuf,
+    timestamp: i64,
+    entries: Vec<BranchListEntry>,
+}
+
+pub fn read_fresh(path: &Path) -> Option<Vec<BranchListEntry>> {
+    let cache_path = cache_file_for(path)?;
+    let content = fs::read_to_string(&cache_path).ok()?;
+    let cache: BranchCache = serde_json::from_str(&content).ok()?;
+    if now_unix() - cache.timestamp > CACHE_TTL_SECS {
+        return None;
+    }
+    Some(cache.entries)
+}
+
+pub fn write(path: &Path, entries: &[BranchListEntry]) -> Result<()> {
+    let Some(cache_path) = cache_file_for(path) else {
+        return Ok(());
+    };
+    if let Some(parent) = cache_path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create cache dir at {}", parent.display()))?;
+    }
+    let cache = BranchCache {
+        invocation_path: path.to_path_buf(),
+        timestamp: now_unix(),
+        entries: entries.to_vec(),
+    };
+    let json = serde_json::to_string(&cache)?;
+    fs::write(&cache_path, json)
+        .with_context(|| format!("failed to write cache at {}", cache_path.display()))?;
+    Ok(())
+}
+
+fn cache_file_for(path: &Path) -> Option<PathBuf> {
+    let dir = cache_dir()?;
+    let key = format!("{:016x}", hash_path(path));
+    Some(dir.join("branches").join(format!("{key}.json")))
+}
+
+fn cache_dir() -> Option<PathBuf> {
+    if let Ok(xdg) = std::env::var("XDG_CACHE_HOME") {
+        if !xdg.is_empty() {
+            return Some(PathBuf::from(xdg).join("git-branch-assistant"));
+        }
+    }
+    let home = std::env::var("HOME").ok()?;
+    Some(
+        PathBuf::from(home)
+            .join(".cache")
+            .join("git-branch-assistant"),
+    )
+}
+
+fn hash_path(path: &Path) -> u64 {
+    fnv1a(path.to_string_lossy().as_bytes())
+}
+
+fn fnv1a(data: &[u8]) -> u64 {
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for byte in data {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
+}
+
+fn now_unix() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::git_repos_list_service::BranchStatus;
+
+    fn temp_cache_env(temp: &Path) {
+        // Tests run in the same process, but each test sets XDG_CACHE_HOME to its own
+        // temp dir before calling read/write so we don't trample on other tests or the
+        // user's real cache.
+        unsafe {
+            std::env::set_var("XDG_CACHE_HOME", temp);
+        }
+    }
+
+    fn entry() -> BranchListEntry {
+        BranchListEntry {
+            repo_name: "repo".to_string(),
+            repo_path: PathBuf::from("/tmp/repo"),
+            refname: "main".to_string(),
+            status: BranchStatus::Identical,
+            commit_timestamp: 1000,
+            commit_date: "2024-01-01".to_string(),
+            committer: "alice".to_string(),
+            worktree_path: None,
+        }
+    }
+
+    #[test]
+    fn write_then_read_round_trips_entries() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        temp_cache_env(temp.path());
+        let invocation = PathBuf::from("/tmp/some/projects");
+        write(&invocation, &[entry()])?;
+        let read = read_fresh(&invocation).expect("expected fresh cache");
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].refname, "main");
+        Ok(())
+    }
+
+    #[test]
+    fn stale_cache_is_ignored() -> Result<()> {
+        let temp = tempfile::tempdir()?;
+        temp_cache_env(temp.path());
+        let invocation = PathBuf::from("/tmp/another/projects");
+        let cache_path = cache_file_for(&invocation).unwrap();
+        fs::create_dir_all(cache_path.parent().unwrap())?;
+        let stale = BranchCache {
+            invocation_path: invocation.clone(),
+            timestamp: now_unix() - CACHE_TTL_SECS - 60,
+            entries: vec![entry()],
+        };
+        fs::write(&cache_path, serde_json::to_string(&stale)?)?;
+        assert!(read_fresh(&invocation).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn missing_cache_returns_none() {
+        let temp = tempfile::tempdir().unwrap();
+        temp_cache_env(temp.path());
+        assert!(read_fresh(Path::new("/tmp/no/cache/here/yet")).is_none());
+    }
+}
