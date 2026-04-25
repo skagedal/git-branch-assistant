@@ -1,14 +1,18 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::thread;
 
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
+use crate::cache;
 use crate::fs_utils::is_globally_ignored;
 use crate::git::{Branch, GitRepo, UpstreamStatus};
+use crate::picker::{self, PickerOutcome};
 use crate::task_result::TaskResult;
-use crate::ui::Prompt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BranchListEntry {
     pub repo_name: String,
     pub repo_path: PathBuf,
@@ -20,7 +24,7 @@ pub struct BranchListEntry {
     pub worktree_path: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BranchStatus {
     Identical,
     UpstreamAhead,
@@ -43,40 +47,74 @@ impl BranchStatus {
     }
 }
 
-pub struct GitReposListService<P: Prompt> {
-    prompt: Option<P>,
+pub struct GitReposListService {
+    interactive: bool,
 }
 
-impl<P: Prompt> GitReposListService<P> {
-    pub fn new(prompt: Option<P>) -> Self {
-        Self { prompt }
+impl GitReposListService {
+    pub fn new(interactive: bool) -> Self {
+        Self { interactive }
     }
 
     pub fn list_all_branches(&self, path: &Path) -> Result<TaskResult> {
-        eprintln!("Collecting branches...");
-        let mut entries = collect_branch_entries(path)?;
-        entries.sort_by(|a, b| {
-            a.commit_timestamp
-                .cmp(&b.commit_timestamp)
-                .then_with(|| a.repo_name.cmp(&b.repo_name))
-                .then_with(|| a.refname.cmp(&b.refname))
-        });
-
-        print_entries(&entries);
-
-        if let Some(prompt) = &self.prompt {
-            if entries.is_empty() {
-                println!("No branches found.");
-                return Ok(TaskResult::Proceed);
-            }
-            let options: Vec<String> = entries.iter().map(format_entry_option).collect();
-            let index = prompt.select("Select a branch to check out", &options)?;
-            let entry = &entries[index];
-            return select_entry(entry);
+        if self.interactive && picker::stderr_is_terminal() {
+            self.run_interactive(path)
+        } else {
+            self.run_non_interactive(path)
         }
+    }
 
+    fn run_non_interactive(&self, path: &Path) -> Result<TaskResult> {
+        eprintln!("Collecting branches...");
+        let entries = collect_and_sort(path)?;
+        let _ = cache::write(path, &entries);
+        print_entries(&entries);
         Ok(TaskResult::Proceed)
     }
+
+    fn run_interactive(&self, path: &Path) -> Result<TaskResult> {
+        let cached = cache::read_fresh(path);
+
+        let (initial, refresh_rx) = match cached {
+            Some(cache_entries) => {
+                let (tx, rx) = mpsc::channel();
+                let scan_path = path.to_path_buf();
+                thread::spawn(move || {
+                    let entries = collect_and_sort(&scan_path).unwrap_or_default();
+                    let _ = cache::write(&scan_path, &entries);
+                    let _ = tx.send(entries);
+                });
+                (cache_entries, Some(rx))
+            }
+            None => {
+                eprintln!("Collecting branches...");
+                let entries = collect_and_sort(path)?;
+                let _ = cache::write(path, &entries);
+                (entries, None)
+            }
+        };
+
+        if initial.is_empty() && refresh_rx.is_none() {
+            println!("No branches found.");
+            return Ok(TaskResult::Proceed);
+        }
+
+        match picker::run(initial, refresh_rx)? {
+            PickerOutcome::Picked(entry) => select_entry(&entry),
+            PickerOutcome::Cancelled => Ok(TaskResult::Proceed),
+        }
+    }
+}
+
+fn collect_and_sort(path: &Path) -> Result<Vec<BranchListEntry>> {
+    let mut entries = collect_branch_entries(path)?;
+    entries.sort_by(|a, b| {
+        a.commit_timestamp
+            .cmp(&b.commit_timestamp)
+            .then_with(|| a.repo_name.cmp(&b.repo_name))
+            .then_with(|| a.refname.cmp(&b.refname))
+    });
+    Ok(entries)
 }
 
 fn collect_branch_entries(path: &Path) -> Result<Vec<BranchListEntry>> {
@@ -138,8 +176,14 @@ fn branch_status(branch: &Branch) -> BranchStatus {
 }
 
 fn print_entries(entries: &[BranchListEntry]) {
+    for line in format_entry_lines(entries) {
+        println!("{line}");
+    }
+}
+
+pub fn format_entry_lines(entries: &[BranchListEntry]) -> Vec<String> {
     if entries.is_empty() {
-        return;
+        return Vec::new();
     }
     let status_width = entries
         .iter()
@@ -156,30 +200,22 @@ fn print_entries(entries: &[BranchListEntry]) {
         .map(|entry| entry.repo_name.chars().count() + 1 + entry.refname.chars().count())
         .max()
         .unwrap_or(0);
-    for entry in entries {
-        let location = format!("{}/{}", entry.repo_name, entry.refname);
-        println!(
-            "{date}  {status:<status_width$}  {committer:<committer_width$}  {location:<location_width$}",
-            date = entry.commit_date,
-            status = entry.status.label(),
-            committer = entry.committer,
-            location = location,
-            status_width = status_width,
-            committer_width = committer_width,
-            location_width = location_width,
-        );
-    }
-}
-
-fn format_entry_option(entry: &BranchListEntry) -> String {
-    format!(
-        "{}  {:<11}  {:<20}  {}/{}",
-        entry.commit_date,
-        entry.status.label(),
-        entry.committer,
-        entry.repo_name,
-        entry.refname,
-    )
+    entries
+        .iter()
+        .map(|entry| {
+            let location = format!("{}/{}", entry.repo_name, entry.refname);
+            format!(
+                "{date}  {status:<status_width$}  {committer:<committer_width$}  {location:<location_width$}",
+                date = entry.commit_date,
+                status = entry.status.label(),
+                committer = entry.committer,
+                location = location,
+                status_width = status_width,
+                committer_width = committer_width,
+                location_width = location_width,
+            )
+        })
+        .collect()
 }
 
 fn select_entry(entry: &BranchListEntry) -> Result<TaskResult> {
@@ -208,35 +244,7 @@ fn paths_equivalent(a: &Path, b: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::{Result, anyhow};
-    use std::sync::{Arc, Mutex};
-
-    #[derive(Clone, Default)]
-    struct TestPrompt {
-        selections: Arc<Mutex<Vec<usize>>>,
-    }
-
-    impl TestPrompt {
-        fn with_selections(selections: Vec<usize>) -> Self {
-            Self {
-                selections: Arc::new(Mutex::new(selections)),
-            }
-        }
-    }
-
-    impl Prompt for TestPrompt {
-        fn select(&self, _message: &str, options: &[String]) -> Result<usize> {
-            let mut selections = self.selections.lock().expect("lock poisoned");
-            if selections.is_empty() {
-                return Err(anyhow!("no selections remaining"));
-            }
-            let index = selections.remove(0);
-            if index >= options.len() {
-                return Err(anyhow!("selected index {index} out of bounds"));
-            }
-            Ok(index)
-        }
-    }
+    use anyhow::Result;
 
     fn entry(timestamp: i64, repo: &str, refname: &str) -> BranchListEntry {
         BranchListEntry {
@@ -289,18 +297,9 @@ mod tests {
     }
 
     #[test]
-    fn list_service_without_prompt_proceeds() -> Result<()> {
+    fn non_interactive_list_proceeds() -> Result<()> {
         let temp = tempfile::tempdir()?;
-        let service = GitReposListService::<TestPrompt>::new(None);
-        let result = service.list_all_branches(temp.path())?;
-        assert!(matches!(result, TaskResult::Proceed));
-        Ok(())
-    }
-
-    #[test]
-    fn empty_list_with_prompt_proceeds() -> Result<()> {
-        let temp = tempfile::tempdir()?;
-        let service = GitReposListService::new(Some(TestPrompt::with_selections(vec![])));
+        let service = GitReposListService::new(false);
         let result = service.list_all_branches(temp.path())?;
         assert!(matches!(result, TaskResult::Proceed));
         Ok(())

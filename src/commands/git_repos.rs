@@ -7,7 +7,6 @@ use crate::repository::Repository;
 use crate::services::git_repos_list_service::GitReposListService;
 use crate::services::git_repos_service::GitReposService;
 use crate::task_result::TaskResult;
-use crate::ui::DialoguerPrompt;
 
 pub fn run(
     path: Option<PathBuf>,
@@ -22,12 +21,7 @@ pub fn run(
         .canonicalize()?;
 
     let result = if list {
-        let prompt = if interactive && !dry {
-            Some(DialoguerPrompt)
-        } else {
-            None
-        };
-        let service = GitReposListService::new(prompt);
+        let service = GitReposListService::new(interactive && !dry);
         service.list_all_branches(&path)?
     } else {
         let service = GitReposService::new(dry, skip_dirty_repos);

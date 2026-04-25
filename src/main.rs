@@ -3,11 +3,13 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+mod cache;
 mod cleaner;
 mod commands;
 mod env;
 mod fs_utils;
 mod git;
+mod picker;
 mod repository;
 mod services;
 mod task_result;

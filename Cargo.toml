@@ -10,6 +10,7 @@ timings = []
 [dependencies]
 anyhow = "*"
 clap = { version = "*", features = ["derive"] }
+console = "*"
 dialoguer = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
