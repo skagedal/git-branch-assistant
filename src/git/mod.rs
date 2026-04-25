@@ -4,7 +4,6 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
 
-
 #[cfg(feature = "git2-backend")]
 mod git2_backend;
 
@@ -13,6 +12,13 @@ pub struct Branch {
     pub refname: String,
     pub upstream: Option<Upstream>,
     pub worktree_path: Option<PathBuf>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BranchCommitInfo {
+    pub commit_timestamp: i64,
+    pub commit_date: String,
+    pub committer: String,
 }
 
 impl Branch {
@@ -103,6 +109,39 @@ impl GitRepo {
         }
 
         Ok(branches)
+    }
+
+    pub fn branch_commit_infos(
+        &self,
+    ) -> Result<std::collections::HashMap<String, BranchCommitInfo>> {
+        let output = self.run_and_capture(
+            "git",
+            &[
+                "for-each-ref",
+                "--format=%(refname:short)|%(committerdate:unix)|%(committerdate:short)|%(committername)",
+                "refs/heads/",
+            ],
+        )?;
+
+        let mut map = std::collections::HashMap::new();
+        for line in output.lines().filter(|line| !line.trim().is_empty()) {
+            let parts: Vec<&str> = line.splitn(4, '|').collect();
+            if parts.len() != 4 {
+                return Err(anyhow!("unexpected output from git for-each-ref: {line}"));
+            }
+            let timestamp: i64 = parts[1]
+                .parse()
+                .with_context(|| format!("failed to parse committer timestamp: {}", parts[1]))?;
+            map.insert(
+                parts[0].to_string(),
+                BranchCommitInfo {
+                    commit_timestamp: timestamp,
+                    commit_date: parts[2].to_string(),
+                    committer: parts[3].to_string(),
+                },
+            );
+        }
+        Ok(map)
     }
 
     pub fn worktrees(&self) -> Result<Vec<Worktree>> {

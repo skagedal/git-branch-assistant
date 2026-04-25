@@ -4,20 +4,45 @@ use std::path::PathBuf;
 use anyhow::Result;
 
 use crate::repository::Repository;
+use crate::services::git_repos_list_service::GitReposListService;
 use crate::services::git_repos_service::GitReposService;
 use crate::task_result::TaskResult;
+use crate::ui::DialoguerPrompt;
 
-pub fn run(path: Option<PathBuf>, dry: bool, skip_dirty_repos: bool) -> Result<i32> {
+pub fn run(
+    path: Option<PathBuf>,
+    dry: bool,
+    skip_dirty_repos: bool,
+    list: bool,
+    interactive: bool,
+) -> Result<i32> {
     let path = path
         .map(Ok)
         .unwrap_or_else(env::current_dir)?
         .canonicalize()?;
-    let service = GitReposService::new(dry, skip_dirty_repos);
-    let result = service.handle_all_git_repos(&path)?;
+
+    let result = if list {
+        let prompt = if interactive && !dry {
+            Some(DialoguerPrompt)
+        } else {
+            None
+        };
+        let service = GitReposListService::new(prompt);
+        service.list_all_branches(&path)?
+    } else {
+        let service = GitReposService::new(dry, skip_dirty_repos);
+        service.handle_all_git_repos(&path)?
+    };
 
     let exit_code = match &result {
         TaskResult::Proceed => 0,
-        TaskResult::ShellActionRequired(_) => if dry { 0 } else { 10 },
+        TaskResult::ShellActionRequired(_) => {
+            if dry {
+                0
+            } else {
+                10
+            }
+        }
     };
 
     if !dry {
