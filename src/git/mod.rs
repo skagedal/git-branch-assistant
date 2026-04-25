@@ -4,9 +4,6 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
 
-#[cfg(feature = "git2-backend")]
-mod git2_backend;
-
 #[derive(Debug, Clone)]
 pub struct Branch {
     pub refname: String,
@@ -65,11 +62,6 @@ impl GitRepo {
     }
 
     pub fn get_branches(&self) -> Result<Vec<Branch>> {
-        #[cfg(feature = "git2-backend")]
-        {
-            return git2_backend::get_branches(self);
-        }
-
         use std::collections::HashMap;
         let output = self.run_and_capture(
             "git",
@@ -145,11 +137,6 @@ impl GitRepo {
     }
 
     pub fn worktrees(&self) -> Result<Vec<Worktree>> {
-        #[cfg(feature = "git2-backend")]
-        {
-            return git2_backend::worktrees(self);
-        }
-
         let output = self.run_and_capture("git", &["worktree", "list", "--porcelain"])?;
         parse_worktrees(&output)
     }
@@ -199,16 +186,10 @@ impl GitRepo {
     }
 
     pub fn is_dirty(&self) -> Result<bool> {
-        #[cfg(feature = "git2-backend")]
-        {
-            return git2_backend::find_dirty_worktree(self).map(|w| w.is_some());
-        }
-
         let output = self.run_and_capture("git", &["status", "--porcelain"])?;
         Ok(!output.trim().is_empty())
     }
 
-    #[cfg(not(feature = "git2-backend"))]
     fn get_upstream_status(&self, local: &str, upstream: &str) -> Result<UpstreamStatus> {
         if !self.branch_exists(upstream)? {
             return Ok(UpstreamStatus::UpstreamIsGone);
@@ -223,7 +204,6 @@ impl GitRepo {
         })
     }
 
-    #[cfg(not(feature = "git2-backend"))]
     fn is_ancestor(&self, base: &str, commit: &str) -> Result<bool> {
         let status = self
             .command("git")
@@ -248,7 +228,6 @@ impl GitRepo {
         }
     }
 
-    #[cfg(not(feature = "git2-backend"))]
     fn branch_exists(&self, branch: &str) -> Result<bool> {
         let status = self
             .command("git")
