@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use git2::{BranchType, ErrorCode, Repository, Status, StatusOptions};
 
 use super::{Branch, GitRepo, Upstream, UpstreamStatus, Worktree};
@@ -77,11 +77,11 @@ pub(super) fn worktree_status(path: &Path) -> Result<GitResult> {
     let repository = match Repository::open(path) {
         Ok(repo) => repo,
         Err(err) if err.code() == ErrorCode::NotFound || err.code() == ErrorCode::InvalidSpec => {
-            return Ok(GitResult::NotGitRepository)
+            return Ok(GitResult::NotGitRepository);
         }
         Err(err) => {
             return Err(err)
-                .with_context(|| format!("failed to open repository at {}", path.display()))
+                .with_context(|| format!("failed to open repository at {}", path.display()));
         }
     };
 
@@ -146,9 +146,7 @@ fn current_branch_name(repo: &Repository) -> Result<Option<String>> {
     match repo.head() {
         Ok(head) => {
             if head.is_branch() {
-                Ok(head
-                    .shorthand()
-                    .map(|name| name.to_string()))
+                Ok(head.shorthand().map(|name| name.to_string()))
             } else {
                 Ok(None)
             }
@@ -164,9 +162,7 @@ fn branch_name(branch: &git2::Branch<'_>) -> Result<String> {
     match branch.name() {
         Ok(Some(name)) => Ok(name.to_string()),
         Ok(None) => Ok(String::from_utf8_lossy(
-            branch
-                .name_bytes()
-                .context("branch name missing bytes")?,
+            branch.name_bytes().context("branch name missing bytes")?,
         )
         .into_owned()),
         Err(err) => Err(err).context("failed to read branch name"),

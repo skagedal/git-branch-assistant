@@ -15,7 +15,10 @@ pub struct GitCleaner<P: Prompt> {
 
 impl<P: Prompt> GitCleaner<P> {
     pub fn new(prompt: P) -> Self {
-        Self { prompt, dry_run: false }
+        Self {
+            prompt,
+            dry_run: false,
+        }
     }
 
     pub fn new_with_dry_run(prompt: P, dry_run: bool) -> Self {
@@ -40,7 +43,10 @@ impl<P: Prompt> GitCleaner<P> {
                 UpstreamStatus::UpstreamIsAheadOfLocal => {
                     if let Some(path) = worktree_elsewhere_path(branch, repo) {
                         if self.dry_run {
-                            println!("[DRY RUN] {}: Upstream is ahead (checked out elsewhere)", branch.refname);
+                            println!(
+                                "[DRY RUN] {}: Upstream is ahead (checked out elsewhere)",
+                                branch.refname
+                            );
                             Ok(TaskResult::Proceed)
                         } else {
                             print_worktree_redirect(branch, &path);
@@ -48,7 +54,10 @@ impl<P: Prompt> GitCleaner<P> {
                         }
                     } else {
                         if self.dry_run {
-                            println!("[DRY RUN] {}: Upstream is ahead, would rebase", branch.refname);
+                            println!(
+                                "[DRY RUN] {}: Upstream is ahead, would rebase",
+                                branch.refname
+                            );
                             Ok(TaskResult::Proceed)
                         } else {
                             repo.rebase(&branch.refname, &upstream.name)?;
@@ -76,7 +85,10 @@ impl<P: Prompt> GitCleaner<P> {
                 }
                 UpstreamStatus::MergeNeeded => {
                     if self.dry_run {
-                        println!("[DRY RUN] {}: Different commits on local and upstream", branch.refname);
+                        println!(
+                            "[DRY RUN] {}: Different commits on local and upstream",
+                            branch.refname
+                        );
                         Ok(TaskResult::Proceed)
                     } else {
                         self.select_action(
@@ -95,7 +107,10 @@ impl<P: Prompt> GitCleaner<P> {
                 }
                 UpstreamStatus::UpstreamIsGone => {
                     if self.dry_run {
-                        println!("[DRY RUN] {}: Upstream is set, but it is gone", branch.refname);
+                        println!(
+                            "[DRY RUN] {}: Upstream is set, but it is gone",
+                            branch.refname
+                        );
                         Ok(TaskResult::Proceed)
                     } else {
                         let mut actions = vec![
@@ -107,7 +122,12 @@ impl<P: Prompt> GitCleaner<P> {
                         if branch_checked_out_elsewhere(branch, repo) {
                             actions.insert(0, BranchAction::DeleteWorktreeAndBranch);
                         }
-                        self.select_action(repo, branch, "Upstream is set, but it is gone", &actions)
+                        self.select_action(
+                            repo,
+                            branch,
+                            "Upstream is set, but it is gone",
+                            &actions,
+                        )
                     }
                 }
             }

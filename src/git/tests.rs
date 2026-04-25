@@ -96,5 +96,4 @@ mod tests {
         assert_eq!(refnames, vec!["existing", "master"]);
         Ok(())
     }
-
 }
