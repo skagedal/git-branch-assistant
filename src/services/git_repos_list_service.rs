@@ -53,6 +53,7 @@ impl<P: Prompt> GitReposListService<P> {
     }
 
     pub fn list_all_branches(&self, path: &Path) -> Result<TaskResult> {
+        eprintln!("Collecting branches...");
         let mut entries = collect_branch_entries(path)?;
         entries.sort_by(|a, b| {
             a.commit_timestamp
