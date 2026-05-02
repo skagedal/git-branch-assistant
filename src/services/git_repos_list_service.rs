@@ -7,7 +7,7 @@ use anyhow::Result;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::cache;
+use crate::cache::BranchCache;
 use crate::fs_utils::is_globally_ignored;
 use crate::git::{Branch, GitRepo, UpstreamStatus};
 use crate::picker::{self, PickerOutcome};
@@ -68,13 +68,16 @@ impl GitReposListService {
     fn run_non_interactive(&self, path: &Path) -> Result<TaskResult> {
         eprintln!("Collecting branches...");
         let entries = collect_and_sort(path)?;
-        let _ = cache::write(path, &entries);
+        if let Some(cache) = BranchCache::from_env() {
+            let _ = cache.write(path, &entries);
+        }
         print_entries(&entries);
         Ok(TaskResult::Proceed)
     }
 
     fn run_interactive(&self, path: &Path) -> Result<TaskResult> {
-        let cached = cache::read_fresh(path);
+        let cache = BranchCache::from_env();
+        let cached = cache.as_ref().and_then(|c| c.read_fresh(path));
 
         let (initial, refresh_rx) = match cached {
             Some(cache_entries) => {
@@ -82,7 +85,9 @@ impl GitReposListService {
                 let scan_path = path.to_path_buf();
                 thread::spawn(move || {
                     let entries = collect_and_sort(&scan_path).unwrap_or_default();
-                    let _ = cache::write(&scan_path, &entries);
+                    if let Some(cache) = BranchCache::from_env() {
+                        let _ = cache.write(&scan_path, &entries);
+                    }
                     let _ = tx.send(entries);
                 });
                 (cache_entries, Some(rx))
@@ -90,7 +95,9 @@ impl GitReposListService {
             None => {
                 eprintln!("Collecting branches...");
                 let entries = collect_and_sort(path)?;
-                let _ = cache::write(path, &entries);
+                if let Some(cache) = cache {
+                    let _ = cache.write(path, &entries);
+                }
                 (entries, None)
             }
         };
