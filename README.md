@@ -1,5 +1,11 @@
 # git-branch-assistant
 
+> **This repository has moved.** The `git-branch-assistant` tool now lives in the
+> [skagedal-tools monorepo](https://github.com/skagedal/skagedal-tools/tree/main/git-branch-assistant).
+> It was imported there in commit
+> [`672c805`](https://github.com/skagedal/skagedal-tools/commit/672c805).
+> This repository is archived and no longer maintained.
+
 **git-branch-assistant** is a command line application to manage your git repositories and synchronize branches with their upstreams. There are many other tools with similar functionality[^1]; this one is built to support the workflow I personally prefer. I use it together with my [assistant](https://github.com/skagedal/assistant) tool, but it can be used as a standalone program.
 
 ## Git cleanup
