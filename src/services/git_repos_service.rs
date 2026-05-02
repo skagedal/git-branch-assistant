@@ -1,4 +1,5 @@
 use anyhow::Result;
+use rayon::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
 #[cfg(feature = "timings")]
@@ -41,16 +42,21 @@ impl GitReposService {
     }
 
     fn fetch_all_results(&self, path: &Path) -> Result<Vec<ResultWithPath>> {
-        let mut results = Vec::new();
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            let entry_path = entry.path();
-            let result = self.repo_result(&entry_path)?;
-            results.push(ResultWithPath {
-                path: entry_path,
-                result,
-            });
-        }
+        let entry_paths: Vec<PathBuf> = fs::read_dir(path)?
+            .map(|entry| entry.map(|e| e.path()))
+            .collect::<std::io::Result<Vec<_>>>()?;
+
+        let mut results: Vec<ResultWithPath> = entry_paths
+            .par_iter()
+            .map(|entry_path| {
+                self.repo_result(entry_path).map(|result| ResultWithPath {
+                    path: entry_path.clone(),
+                    result,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        results.sort_by(|a, b| a.path.cmp(&b.path));
         Ok(results)
     }
 

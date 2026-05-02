@@ -4,6 +4,7 @@ use std::sync::mpsc;
 use std::thread;
 
 use anyhow::Result;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use crate::cache;
@@ -118,46 +119,44 @@ fn collect_and_sort(path: &Path) -> Result<Vec<BranchListEntry>> {
 }
 
 fn collect_branch_entries(path: &Path) -> Result<Vec<BranchListEntry>> {
-    let mut entries = Vec::new();
-    for dir_entry in fs::read_dir(path)? {
-        let dir_entry = dir_entry?;
-        let entry_path = dir_entry.path();
-        if !entry_path.is_dir() {
-            continue;
-        }
-        if is_globally_ignored(&entry_path) {
-            continue;
-        }
-        let repo = GitRepo::new(entry_path.clone());
-        let branches = match repo.get_branches() {
-            Ok(branches) => branches,
-            Err(_) => continue,
-        };
-        let commit_infos = match repo.branch_commit_infos() {
-            Ok(infos) => infos,
-            Err(_) => continue,
-        };
-        let repo_name = entry_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .map(|name| name.to_string())
-            .unwrap_or_else(|| entry_path.to_string_lossy().into_owned());
+    let dir_paths: Vec<PathBuf> = fs::read_dir(path)?
+        .filter_map(|entry| entry.ok().map(|e| e.path()))
+        .filter(|p| p.is_dir() && !is_globally_ignored(p))
+        .collect();
 
-        for branch in branches {
-            let Some(info) = commit_infos.get(&branch.refname) else {
-                continue;
-            };
-            entries.push(BranchListEntry {
-                repo_name: repo_name.clone(),
-                repo_path: entry_path.clone(),
-                refname: branch.refname.clone(),
-                status: branch_status(&branch),
-                commit_timestamp: info.commit_timestamp,
-                commit_date: info.commit_date.clone(),
-                committer: info.committer.clone(),
-                worktree_path: branch.worktree_path.clone(),
-            });
-        }
+    let entries: Vec<BranchListEntry> = dir_paths
+        .par_iter()
+        .flat_map(|entry_path| collect_repo_entries(entry_path).unwrap_or_default())
+        .collect();
+
+    Ok(entries)
+}
+
+fn collect_repo_entries(entry_path: &Path) -> Result<Vec<BranchListEntry>> {
+    let repo = GitRepo::new(entry_path.to_path_buf());
+    let branches = repo.get_branches()?;
+    let commit_infos = repo.branch_commit_infos()?;
+    let repo_name = entry_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.to_string())
+        .unwrap_or_else(|| entry_path.to_string_lossy().into_owned());
+
+    let mut entries = Vec::new();
+    for branch in branches {
+        let Some(info) = commit_infos.get(&branch.refname) else {
+            continue;
+        };
+        entries.push(BranchListEntry {
+            repo_name: repo_name.clone(),
+            repo_path: entry_path.to_path_buf(),
+            refname: branch.refname.clone(),
+            status: branch_status(&branch),
+            commit_timestamp: info.commit_timestamp,
+            commit_date: info.commit_date.clone(),
+            committer: info.committer.clone(),
+            worktree_path: branch.worktree_path.clone(),
+        });
     }
     Ok(entries)
 }
