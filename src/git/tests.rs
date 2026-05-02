@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use super::super::parse_worktrees;
+    use super::super::parse_branches;
     use crate::git::{Branch, GitRepo, Upstream, UpstreamStatus};
     use anyhow::Result;
     use std::path::PathBuf;
@@ -49,18 +49,6 @@ mod tests {
         assert_eq!(repo.dir(), dir.as_path());
     }
 
-    #[test]
-    fn parse_worktrees_extracts_branches() -> Result<()> {
-        let output = "worktree /repo\nHEAD abc\nbranch refs/heads/main\n\nworktree /repo/feature\nHEAD def\nbranch refs/heads/feature\n";
-        let worktrees = parse_worktrees(output)?;
-        assert_eq!(worktrees.len(), 2);
-        assert_eq!(worktrees[0].path, PathBuf::from("/repo"));
-        assert_eq!(worktrees[0].branch.as_deref(), Some("main"));
-        assert_eq!(worktrees[1].path, PathBuf::from("/repo/feature"));
-        assert_eq!(worktrees[1].branch.as_deref(), Some("feature"));
-        Ok(())
-    }
-
     fn test_repo(repo_name: &str) -> Result<GitRepo> {
         let temp_dir = tempfile::tempdir()?;
         let tarball_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -84,6 +72,46 @@ mod tests {
         let repo_path = temp_dir.path().join(repo_name);
         let _ = temp_dir.keep();
         Ok(GitRepo::new(repo_path))
+    }
+
+    #[test]
+    fn parse_branches_handles_all_upstream_states() -> Result<()> {
+        let output = "\
+main|origin/main||/repo
+behind|origin/behind|[behind 2]|
+ahead|origin/ahead|[ahead 1]|
+diverged|origin/diverged|[ahead 1, behind 2]|
+gone|origin/gone|[gone]|
+local-only||||
+";
+        let branches = parse_branches(output)?;
+        assert_eq!(branches.len(), 6);
+
+        let by_name: std::collections::HashMap<_, _> =
+            branches.iter().map(|b| (b.refname.as_str(), b)).collect();
+
+        let main = by_name["main"];
+        assert_eq!(main.upstream.as_ref().map(|u| u.status), Some(UpstreamStatus::Identical));
+        assert_eq!(main.worktree_path, Some(PathBuf::from("/repo")));
+
+        assert_eq!(
+            by_name["behind"].upstream.as_ref().map(|u| u.status),
+            Some(UpstreamStatus::UpstreamIsAheadOfLocal)
+        );
+        assert_eq!(
+            by_name["ahead"].upstream.as_ref().map(|u| u.status),
+            Some(UpstreamStatus::LocalIsAheadOfUpstream)
+        );
+        assert_eq!(
+            by_name["diverged"].upstream.as_ref().map(|u| u.status),
+            Some(UpstreamStatus::MergeNeeded)
+        );
+        assert_eq!(
+            by_name["gone"].upstream.as_ref().map(|u| u.status),
+            Some(UpstreamStatus::UpstreamIsGone)
+        );
+        assert!(by_name["local-only"].upstream.is_none());
+        Ok(())
     }
 
     #[test]

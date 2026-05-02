@@ -33,12 +33,6 @@ pub struct Upstream {
     pub status: UpstreamStatus,
 }
 
-#[derive(Debug, Clone)]
-pub struct Worktree {
-    pub path: PathBuf,
-    pub branch: Option<String>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpstreamStatus {
     Identical,
@@ -62,45 +56,15 @@ impl GitRepo {
     }
 
     pub fn get_branches(&self) -> Result<Vec<Branch>> {
-        use std::collections::HashMap;
         let output = self.run_and_capture(
             "git",
-            &["branch", "--format=%(refname:short):%(upstream:short)"],
+            &[
+                "for-each-ref",
+                "--format=%(refname:short)|%(upstream:short)|%(upstream:track)|%(worktreepath)",
+                "refs/heads/",
+            ],
         )?;
-
-        let worktree_map: HashMap<String, PathBuf> = self
-            .worktrees()?
-            .into_iter()
-            .filter_map(|worktree| worktree.branch.map(|branch| (branch, worktree.path)))
-            .collect();
-
-        let mut branches = Vec::new();
-        for line in output.lines().filter(|line| !line.trim().is_empty()) {
-            let mut parts = line.splitn(2, ':');
-            let local = parts
-                .next()
-                .ok_or_else(|| anyhow!("unexpected output from git branch: {line}"))?
-                .trim()
-                .to_string();
-            let worktree_path = worktree_map.get(&local).cloned();
-            let upstream_part = parts.next().unwrap_or("").trim();
-            let upstream = if upstream_part.is_empty() {
-                None
-            } else {
-                let status = self.get_upstream_status(&local, upstream_part)?;
-                Some(Upstream {
-                    name: upstream_part.to_string(),
-                    status,
-                })
-            };
-            branches.push(Branch {
-                refname: local,
-                upstream,
-                worktree_path,
-            });
-        }
-
-        Ok(branches)
+        parse_branches(&output)
     }
 
     pub fn branch_commit_infos(
@@ -136,10 +100,6 @@ impl GitRepo {
         Ok(map)
     }
 
-    pub fn worktrees(&self) -> Result<Vec<Worktree>> {
-        let output = self.run_and_capture("git", &["worktree", "list", "--porcelain"])?;
-        parse_worktrees(&output)
-    }
     pub fn push(&self, refname: &str) -> Result<()> {
         self.run_interactive_printing("git", &["push", "origin", refname])
     }
@@ -188,66 +148,6 @@ impl GitRepo {
     pub fn is_dirty(&self) -> Result<bool> {
         let output = self.run_and_capture("git", &["status", "--porcelain"])?;
         Ok(!output.trim().is_empty())
-    }
-
-    fn get_upstream_status(&self, local: &str, upstream: &str) -> Result<UpstreamStatus> {
-        if !self.branch_exists(upstream)? {
-            return Ok(UpstreamStatus::UpstreamIsGone);
-        }
-        let local_is_ancestor = self.is_ancestor(local, upstream)?;
-        let upstream_is_ancestor = self.is_ancestor(upstream, local)?;
-        Ok(match (local_is_ancestor, upstream_is_ancestor) {
-            (true, true) => UpstreamStatus::Identical,
-            (true, false) => UpstreamStatus::UpstreamIsAheadOfLocal,
-            (false, true) => UpstreamStatus::LocalIsAheadOfUpstream,
-            (false, false) => UpstreamStatus::MergeNeeded,
-        })
-    }
-
-    fn is_ancestor(&self, base: &str, commit: &str) -> Result<bool> {
-        let status = self
-            .command("git")
-            .arg("merge-base")
-            .arg("--is-ancestor")
-            .arg(base)
-            .arg(commit)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .with_context(|| {
-                format!("failed to run git merge-base --is-ancestor {base} {commit}")
-            })?;
-
-        match status.code() {
-            Some(0) => Ok(true),
-            Some(1) | Some(128) => Ok(false),
-            Some(code) => Err(anyhow!(
-                "git merge-base returned unexpected exit code {code}"
-            )),
-            None => Err(anyhow!("git merge-base terminated by signal")),
-        }
-    }
-
-    fn branch_exists(&self, branch: &str) -> Result<bool> {
-        let status = self
-            .command("git")
-            .arg("rev-parse")
-            .arg("--quiet")
-            .arg("--verify")
-            .arg(branch)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status()
-            .with_context(|| format!("failed to run git rev-parse --verify {branch}"))?;
-
-        match status.code() {
-            Some(0) => Ok(true),
-            Some(1) => Ok(false),
-            Some(code) => Err(anyhow!(
-                "git rev-parse returned unexpected exit code {code}"
-            )),
-            None => Err(anyhow!("git rev-parse terminated by signal")),
-        }
     }
 
     fn default_branch(&self) -> Result<String> {
@@ -341,61 +241,56 @@ fn format_command(program: &str, args: &[&str]) -> String {
     parts.join(" ")
 }
 
-fn parse_worktrees(output: &str) -> Result<Vec<Worktree>> {
-    #[derive(Default)]
-    struct Pending {
-        path: Option<PathBuf>,
-        branch: Option<String>,
-    }
-
-    fn finish(pending: &mut Pending, worktrees: &mut Vec<Worktree>) -> Result<()> {
-        if let Some(path) = pending.path.take() {
-            worktrees.push(Worktree {
-                path,
-                branch: pending.branch.take(),
-            });
+fn parse_branches(output: &str) -> Result<Vec<Branch>> {
+    let mut branches = Vec::new();
+    for line in output.lines().filter(|line| !line.trim().is_empty()) {
+        let parts: Vec<&str> = line.splitn(4, '|').collect();
+        if parts.len() != 4 {
+            return Err(anyhow!("unexpected output from git for-each-ref: {line}"));
         }
-        Ok(())
-    }
-
-    let mut worktrees = Vec::new();
-    let mut pending = Pending::default();
-
-    for line in output.lines().chain(std::iter::once("")) {
-        let line = line.trim_end();
-        if line.is_empty() {
-            finish(&mut pending, &mut worktrees)?;
-            continue;
-        }
-
-        let (key, value) = match line.split_once(' ') {
-            Some((key, value)) => (key, value.trim()),
-            None => (line, ""),
+        let refname = parts[0].trim().to_string();
+        let upstream_name = parts[1].trim();
+        let track = parts[2].trim();
+        let worktree_path = match parts[3].trim() {
+            "" => None,
+            path => Some(PathBuf::from(path)),
         };
-
-        match key {
-            "worktree" => {
-                finish(&mut pending, &mut worktrees)?;
-                if value.is_empty() {
-                    return Err(anyhow!("git worktree entry missing path"));
-                }
-                pending.path = Some(PathBuf::from(value));
-                pending.branch = None;
-            }
-            "branch" => {
-                if !value.is_empty() {
-                    let name = value
-                        .strip_prefix("refs/heads/")
-                        .unwrap_or(value)
-                        .to_string();
-                    pending.branch = Some(name);
-                }
-            }
-            _ => {}
-        }
+        let upstream = if upstream_name.is_empty() {
+            None
+        } else {
+            Some(Upstream {
+                name: upstream_name.to_string(),
+                status: parse_upstream_track(track),
+            })
+        };
+        branches.push(Branch {
+            refname,
+            upstream,
+            worktree_path,
+        });
     }
+    Ok(branches)
+}
 
-    Ok(worktrees)
+fn parse_upstream_track(track: &str) -> UpstreamStatus {
+    if track.is_empty() {
+        return UpstreamStatus::Identical;
+    }
+    let inner = track
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .unwrap_or(track);
+    if inner == "gone" {
+        return UpstreamStatus::UpstreamIsGone;
+    }
+    let has_ahead = inner.split(',').any(|part| part.trim().starts_with("ahead"));
+    let has_behind = inner.split(',').any(|part| part.trim().starts_with("behind"));
+    match (has_ahead, has_behind) {
+        (true, true) => UpstreamStatus::MergeNeeded,
+        (true, false) => UpstreamStatus::LocalIsAheadOfUpstream,
+        (false, true) => UpstreamStatus::UpstreamIsAheadOfLocal,
+        (false, false) => UpstreamStatus::Identical,
+    }
 }
 
 #[cfg(test)]
